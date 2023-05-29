@@ -27,8 +27,8 @@ repos:
     - id: nbstripout
   - repo: local
     hooks:
-    - id: pytest
-      name: Check pytest unit tests pass
+    - id: unittest
+      name: unittest
       entry: python3 -m pytest -vx -m "not slow"
       pass_filenames: false
       language: system
