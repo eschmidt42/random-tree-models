@@ -282,6 +282,8 @@ pure-eval==0.2.2
     # via stack-data
 pycparser==2.21
     # via cffi
+pydantic==1.10.8
+    # via random-tree-models (pyproject.toml)
 pygments==2.15.1
     # via
     #   ipython
@@ -397,7 +399,9 @@ traitlets==5.9.0
     #   nbformat
     #   notebook
 typing-extensions==4.6.2
-    # via async-lru
+    # via
+    #   async-lru
+    #   pydantic
 tzdata==2023.3
     # via pandas
 uri-template==1.2.0

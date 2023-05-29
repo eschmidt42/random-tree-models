@@ -19,7 +19,8 @@ dependencies = [
     "isort",
     "pre-commit",
     "jupyter-contrib-nbextensions",
-    "pandas"
+    "pandas",
+    "pydantic"
 ]
 
 [tool.black]
