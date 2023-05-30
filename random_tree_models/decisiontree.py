@@ -1,5 +1,7 @@
 import typing as T
 import uuid
+from enum import Enum
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -164,12 +166,14 @@ def calc_gini_impurity(y: np.ndarray, target_groups: np.ndarray) -> float:
     return -g
 
 
-# TODO: create enum for keys of split_score_funcs
-SPLIT_SCORE_FUNCS: T.Dict[str, T.Callable] = {
-    "variance": calc_variance,
-    "entropy": calc_entropy,
-    "gini": calc_gini_impurity,
-}
+class SplitScoreMetrics(Enum):
+    # https://stackoverflow.com/questions/40338652/how-to-define-enum-values-that-are-functions
+    variance = partial(calc_variance)
+    entropy = partial(calc_entropy)
+    gini = partial(calc_gini_impurity)
+
+    def __call__(self, y: np.ndarray, target_groups: np.ndarray) -> float:
+        return self.value(y, target_groups)
 
 
 @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
@@ -195,7 +199,7 @@ def find_best_split(
 
         for threshold in feature_values[1 :: n - 2]:
             target_groups = feature_values < threshold
-            split_score = SPLIT_SCORE_FUNCS[measure_name](y, target_groups)
+            split_score = SplitScoreMetrics[measure_name](y, target_groups)
 
             if best_score is None or split_score > best_score:
                 best_score = split_score
@@ -231,7 +235,7 @@ def grow_tree(
     )
     prediction = np.mean(y) if len(y) > 0 else None
     score = (
-        SPLIT_SCORE_FUNCS[measure_name](y, np.ones_like(y, dtype=bool))
+        SplitScoreMetrics[measure_name](y, np.ones_like(y, dtype=bool))
         if len(y) > 0
         else None
     )
@@ -373,7 +377,7 @@ class DecisionTreeRegressor(DecisionTreeTemplate):
         self,
         X: T.Union[pd.DataFrame, np.ndarray],
         y: T.Union[pd.Series, np.ndarray],
-    ) -> "DecisionTreeTemplate":
+    ) -> "DecisionTreeRegressor":
         X, y = check_X_y(X, y)
         self.tree_ = grow_tree(
             X, y, measure_name=self.measure_name, max_depth=self.max_depth
@@ -397,7 +401,7 @@ class DecisionTreeClassifier(DecisionTreeTemplate):
         self,
         X: T.Union[pd.DataFrame, np.ndarray],
         y: T.Union[pd.Series, np.ndarray],
-    ) -> "DecisionTreeTemplate":
+    ) -> "DecisionTreeClassifier":
         X, y = check_X_y(X, y)
         self.classes_, y = np.unique(y, return_inverse=True)
         self.tree_ = grow_tree(
