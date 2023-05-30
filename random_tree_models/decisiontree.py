@@ -353,6 +353,11 @@ def predict_with_tree(tree: Node, X: np.ndarray) -> np.ndarray:
 
 
 class DecisionTreeTemplate(base.BaseEstimator):
+    """Template for DecisionTree classes
+
+    Based on: https://scikit-learn.org/stable/developers/develop.html#rolling-your-own-estimator
+    """
+
     tree_: Node = None
 
     def __init__(self, max_depth: int, measure_name: str) -> None:
@@ -371,6 +376,11 @@ class DecisionTreeTemplate(base.BaseEstimator):
 
 
 class DecisionTreeRegressor(DecisionTreeTemplate):
+    """DecisionTreeRegressor
+
+    Based on: https://scikit-learn.org/stable/developers/develop.html#rolling-your-own-estimator
+    """
+
     tree_: Node = None
 
     def fit(
@@ -394,6 +404,11 @@ class DecisionTreeRegressor(DecisionTreeTemplate):
 
 
 class DecisionTreeClassifier(DecisionTreeTemplate):
+    """DecisionTreeClassifier
+
+    Based on: https://scikit-learn.org/stable/developers/develop.html#rolling-your-own-estimator
+    """
+
     tree_: Node = None
     classes_: np.ndarray = None
 
