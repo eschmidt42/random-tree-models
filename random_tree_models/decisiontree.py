@@ -6,7 +6,14 @@ from functools import partial
 import numpy as np
 import pandas as pd
 import sklearn.base as base
-from pydantic import ConfigDict, Field
+from pydantic import (
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictFloat,
+    StrictInt,
+    StrictStr,
+)
 from pydantic.dataclasses import dataclass
 from rich import print as rprint
 from rich.tree import Tree
@@ -14,18 +21,18 @@ from sklearn.utils.multiclass import unique_labels
 from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 
 
-@dataclass
+@dataclass(validate_on_init=True)
 class SplitScore:
-    name: str  # name of the score used
-    value: float = None  # optimization value gini etc
+    name: StrictStr  # name of the score used
+    value: StrictFloat = None  # optimization value gini etc
 
 
 @dataclass
 class Node:
-    """Decision node in a tree"""
+    """Decision node in a decision tree"""
 
     # Stuff for making a decision
-    array_column: int = None  # index of the column to use
+    array_column: StrictInt = None  # index of the column to use
     threshold: float = None  # threshold for decision
     prediction: float = None  # value to use for predictions
 
@@ -36,8 +43,8 @@ class Node:
     # misc info
     measure: SplitScore = None
 
-    n_obs: int = None  # number of observations in node
-    reason: str = None  # place for some comment
+    n_obs: StrictInt = None  # number of observations in node
+    reason: StrictStr = None  # place for some comment
 
     def __post_init__(self):
         # unique identifier of the node
@@ -62,32 +69,32 @@ def check_is_baselevel(
         return (False, "")
 
 
-def calc_variance(y: np.ndarray, target_groups: np.ndarray) -> float:
-    """Calculates the variance of a split"""
-
+def check_y_and_target_groups(y: np.ndarray, target_groups: np.ndarray = None):
     n = len(y)
     if n == 0:
         raise ValueError(f"{n=}, expected at least one target value")
 
-    if len(target_groups) != n:
+    if target_groups is not None and len(target_groups) != n:
         raise ValueError(f"{y.shape=} != {target_groups.shape=}")
+
+
+def calc_variance(y: np.ndarray, target_groups: np.ndarray) -> float:
+    """Calculates the variance of a split"""
+
+    check_y_and_target_groups(y, target_groups=target_groups)
+
+    n = len(y)
 
     if len(np.unique(target_groups)) == 1:
         return np.var(y)
 
-    # left hand side variance
+    w_left = target_groups.sum() / n
+    w_right = 1.0 - w_left
+
     var_left = np.var(y[target_groups])
-    n_left = target_groups.sum()
-
-    # right hand side variance
     var_right = np.var(y[~target_groups])
-    n_right = n - n_left
 
-    # overall variance
-    w_left = n_left / n
-    w_right = n_right / n
     var = w_left * var_left + w_right * var_right
-
     return -var
 
 
@@ -95,8 +102,7 @@ def entropy(y: np.ndarray) -> float:
     "Calculates the entropy across target values"
 
     n = len(y)
-    if n == 0:
-        raise ValueError(f"{n=}, expected at least one target value")
+    check_y_and_target_groups(y)
 
     unique_ys = np.unique(y)
     ns = np.array([(y == y_val).sum() for y_val in unique_ys], dtype=int)
@@ -117,6 +123,8 @@ def entropy(y: np.ndarray) -> float:
 def calc_entropy(y: np.ndarray, target_groups: np.ndarray) -> float:
     """Calculates the entropy of a split"""
 
+    check_y_and_target_groups(y, target_groups=target_groups)
+
     w_left = target_groups.sum() / len(target_groups)
     w_right = 1.0 - w_left
 
@@ -130,9 +138,9 @@ def calc_entropy(y: np.ndarray, target_groups: np.ndarray) -> float:
 def gini_impurity(y: np.ndarray) -> float:
     "Calculates the gini impurity across target values"
 
+    check_y_and_target_groups(y)
+
     n = len(y)
-    if n == 0:
-        raise ValueError(f"{n=}, expected at least one target value")
 
     unique_ys = np.unique(y)
     ns = np.array([(y == y_val).sum() for y_val in unique_ys], dtype=int)
@@ -147,7 +155,7 @@ def gini_impurity(y: np.ndarray) -> float:
     g = ps[mask_ne0] * (1 - ps[mask_ne0])
     g = g.sum()
 
-    return g
+    return -g
 
 
 def calc_gini_impurity(y: np.ndarray, target_groups: np.ndarray) -> float:
@@ -156,6 +164,8 @@ def calc_gini_impurity(y: np.ndarray, target_groups: np.ndarray) -> float:
     Based on: https://scikit-learn.org/stable/modules/tree.html#classification-criteria
     """
 
+    check_y_and_target_groups(y, target_groups=target_groups)
+
     w_left = target_groups.sum() / len(target_groups)
     w_right = 1.0 - w_left
 
@@ -163,7 +173,7 @@ def calc_gini_impurity(y: np.ndarray, target_groups: np.ndarray) -> float:
     g_right = gini_impurity(y[~target_groups]) if w_right > 0 else 0
 
     g = w_left * g_left + w_right * g_right
-    return -g
+    return g
 
 
 class SplitScoreMetrics(Enum):
@@ -178,9 +188,9 @@ class SplitScoreMetrics(Enum):
 
 @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
 class BestSplit:
-    score: float
-    column: int
-    threshold: float
+    score: StrictFloat
+    column: StrictInt
+    threshold: StrictFloat
     target_groups: np.ndarray = Field(default_factory=lambda: np.zeros(10))
 
 
