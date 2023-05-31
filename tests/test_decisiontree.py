@@ -383,16 +383,107 @@ def test_bestsplit(score, column, threshold, target_groups):
         assert hasattr(best, "target_groups")
 
 
-# TODO: CONTINUE HERE
-# class Test_find_best_split:
+class Test_find_best_split:
+    """
+    cases to test for all measure_name values:
+    * simple & 1d is split as expected
+        * classification: y = 1 class, y = 2 classes, y = 3 classes
+        * regression: y = 1 value, y = 2 values, y = 3 values where 2 are more similar
+    * simple & 2d is split as expected
+        * same as 1d but 1st column useless and 2nd contains the needed info
+    """
 
-#     X = np.ndarray([
-#         [1,1],
-#         [2,2]
-#     ])
+    X_1D = np.array(
+        [
+            [
+                1,
+            ],
+            [
+                2,
+            ],
+            [
+                3,
+            ],
+            [
+                4,
+            ],
+        ]
+    )
 
-#     def test_gini(self):
-#         ...
+    X_2D = np.hstack((np.ones_like(X_1D), X_1D))
+
+    y_1class = np.ones(X_1D.shape[0], dtype=bool)
+    y_2class = np.array([False, False, True, True])
+    y_3class = np.array([0, 0, 1, 2])
+
+    y_1reg = np.ones(X_1D.shape[0])
+    y_2reg = np.array([-1.0, -1.0, 1.0, 1.0])
+    y_3reg = np.array([-1.0, -0.9, 1.0, 2.0])
+
+    @pytest.mark.parametrize(
+        "y,ix,measure_name",
+        [
+            (y_1class, None, "gini"),
+            (y_2class, 2, "gini"),
+            (y_3class, 2, "gini"),
+            (y_1class, None, "entropy"),
+            (y_2class, 2, "entropy"),
+            (y_3class, 2, "entropy"),
+            (y_1reg, None, "variance"),
+            (y_2reg, 2, "variance"),
+            (y_3reg, 2, "variance"),
+        ],
+    )
+    def test_1d(self, y: np.ndarray, ix: int, measure_name: str):
+        is_homogenous = len(np.unique(y)) == 1
+        try:
+            # line to test
+            best = dtree.find_best_split(
+                self.X_1D, y, measure_name=measure_name
+            )
+        except ValueError as ex:
+            if is_homogenous:
+                pytest.xfail("Splitting a homogneous y failed as expected")
+            else:
+                raise ex
+        else:
+            if is_homogenous:
+                pytest.fail("Splitting a homogneous y passed unexpectedly")
+
+            threshold_exp = float(self.X_1D[ix, 0])
+            assert best.threshold == threshold_exp
+
+    @pytest.mark.parametrize(
+        "y,ix,measure_name",
+        [
+            (y_1class, None, "gini"),
+            (y_2class, 2, "gini"),
+            (y_3class, 2, "gini"),
+            (y_1class, None, "entropy"),
+            (y_2class, 2, "entropy"),
+            (y_3class, 2, "entropy"),
+            (y_1reg, None, "variance"),
+            (y_2reg, 2, "variance"),
+            (y_3reg, 2, "variance"),
+        ],
+    )
+    def test_2d(self, y: np.ndarray, ix: int, measure_name: str):
+        is_homogenous = len(np.unique(y)) == 1
+        try:
+            # line to test
+            best = dtree.find_best_split(self.X_2D, y, measure_name)
+        except ValueError as ex:
+            if is_homogenous:
+                pytest.xfail("Splitting a homogneous y failed as expected")
+            else:
+                raise ex
+        else:
+            if is_homogenous:
+                pytest.fail("Splitting a homogneous y passed unexpectedly")
+
+            assert best.column == 1
+            threshold_exp = float(self.X_2D[ix, 1])
+            assert best.threshold == threshold_exp
 
 
 # TODO: test grow_tree

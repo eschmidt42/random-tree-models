@@ -86,7 +86,7 @@ def calc_variance(y: np.ndarray, target_groups: np.ndarray) -> float:
     n = len(y)
 
     if len(np.unique(target_groups)) == 1:
-        return np.var(y)
+        return -np.var(y)
 
     w_left = target_groups.sum() / n
     w_right = 1.0 - w_left
@@ -197,20 +197,22 @@ class BestSplit:
 def find_best_split(
     X: np.ndarray, y: np.ndarray, measure_name: str
 ) -> BestSplit:
+    if len(np.unique(y)) == 1:
+        raise ValueError(
+            f"Tried to find a split for homogenous y: {y[:3]} ... {y[-3:]}"
+        )
+
     best_score = None
     best_column = None
     best_threshold = None
     best_target_groups = None
 
-    n = len(X)
-
     for array_column in range(X.shape[1]):
         feature_values = X[:, array_column]
 
-        for threshold in feature_values[1 :: n - 2]:
+        for threshold in feature_values[1:]:
             target_groups = feature_values < threshold
             split_score = SplitScoreMetrics[measure_name](y, target_groups)
-
             if best_score is None or split_score > best_score:
                 best_score = split_score
                 best_column = array_column
@@ -218,7 +220,10 @@ def find_best_split(
                 best_target_groups = target_groups
 
     return BestSplit(
-        best_score, best_column, best_threshold, best_target_groups
+        float(best_score),
+        int(best_column),
+        float(best_threshold),
+        best_target_groups,
     )
 
 
