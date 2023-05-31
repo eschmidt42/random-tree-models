@@ -763,16 +763,94 @@ def test_predict_with_tree():
     assert np.allclose(predictions, np.arange(0, 4, 1))
 
 
-# TODO: test DecisionTreeTemplate
-def test_decisiontreetemplate():
-    ...
+class TestDecisionTreeTemplate:
+    model = dtree.DecisionTreeTemplate()
+
+    def test_tree_(self):
+        assert not hasattr(self.model, "tree_")
+
+    def test_growth_params_(self):
+        assert not hasattr(self.model, "growth_params_")
+
+        self.model._organize_growth_parameters()
+        assert isinstance(self.model.growth_params_, dtree.TreeGrowthParameters)
+
+    def test_fit(self):
+        try:
+            self.model.fit(None, None)
+        except NotImplementedError as ex:
+            pytest.xfail("DecisionTreeTemplate.fit expectedly refused call")
+
+    def test_predict(self):
+        try:
+            self.model.predict(None)
+        except NotImplementedError as ex:
+            pytest.xfail("DecisionTreeTemplate.predict expectedly refused call")
 
 
-# TODO: test DecisionTreeRegressor using parametrize_with_checks https://scikit-learn.org/stable/modules/generated/sklearn.utils.estimator_checks.parametrize_with_checks.html#sklearn.utils.estimator_checks.parametrize_with_checks
-def test_decisiontreeregressor():
-    ...
+class TestDecisionTreeRegressor:
+    model = dtree.DecisionTreeRegressor()
+
+    X = np.array(
+        [
+            [-1, -1],
+            [1, -1],
+            [1, 1],
+            [-1, 1],
+        ]
+    )
+    y = np.array([0.0, 0.0, 1.0, 1.0])
+
+    def test_fit(self):
+        model = dtree.DecisionTreeRegressor()
+        model.fit(self.X, self.y)
+        assert isinstance(model.tree_, dtree.Node)
+
+    def test_predict(self):
+        model = dtree.DecisionTreeRegressor()
+        model.fit(self.X, self.y)
+        predictions = model.predict(self.X)
+        assert np.allclose(predictions, self.y)
 
 
-# TODO: test DecisionTreeClassifier using parametrize_with_checks https://scikit-learn.org/stable/modules/generated/sklearn.utils.estimator_checks.parametrize_with_checks.html#sklearn.utils.estimator_checks.parametrize_with_checks
-def test_decisiontreeclassifier():
-    ...
+class TestDecisionTreeClassifier:
+    model = dtree.DecisionTreeClassifier()
+
+    X = np.array(
+        [
+            [-1, -1],
+            [1, -1],
+            [1, 1],
+            [-1, 1],
+        ]
+    )
+    y = np.array([False, False, True, True])
+
+    def test_classes_(self):
+        assert not hasattr(self.model, "classes_")
+
+    def test_fit(self):
+        model = dtree.DecisionTreeClassifier()
+        model.fit(self.X, self.y)
+        assert not hasattr(self.model, "classes_")
+        assert isinstance(model.tree_, dtree.Node)
+
+    def test_predict(self):
+        model = dtree.DecisionTreeClassifier()
+        model.fit(self.X, self.y)
+        predictions = model.predict(self.X)
+        assert (predictions == self.y).all()
+
+
+from sklearn.utils.estimator_checks import parametrize_with_checks
+
+
+@parametrize_with_checks(
+    [dtree.DecisionTreeRegressor(), dtree.DecisionTreeClassifier()]
+)
+def test_estimators_with_sklearn_checks(estimator, check):
+    """Test of estimators using scikit-learn test suite
+
+    Reference: https://scikit-learn.org/stable/modules/generated/sklearn.utils.estimator_checks.parametrize_with_checks.html#sklearn.utils.estimator_checks.parametrize_with_checks
+    """
+    check(estimator)

@@ -17,7 +17,7 @@ from pydantic import (
 from pydantic.dataclasses import dataclass
 from rich import print as rprint
 from rich.tree import Tree
-from sklearn.utils.multiclass import unique_labels
+from sklearn.utils.multiclass import check_classification_targets, unique_labels
 from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 
 
@@ -263,6 +263,7 @@ def grow_tree(
     is_baselevel, reason = check_is_baselevel(
         y, parent_node, depth, max_depth=growth_params.max_depth
     )
+    # TODO: enable choice of other aggregations / handling of multi class cases
     prediction = np.mean(y) if len(y) > 0 else None
     score = (
         SplitScoreMetrics[measure_name](y, np.ones_like(y, dtype=bool))
@@ -363,7 +364,10 @@ def find_leaf_node(node: Node, x: np.ndarray) -> Node:
 
 def predict_with_tree(tree: Node, X: np.ndarray) -> np.ndarray:
     "Traverse a previously built tree to make one prediction per row in X"
-
+    if not isinstance(tree, Node):
+        raise ValueError(
+            f"Passed `tree` needs to be an instantiation of Node, got {tree=}"
+        )
     n_obs = len(X)
     predictions = [None for _ in range(n_obs)]
 
@@ -381,9 +385,6 @@ class DecisionTreeTemplate(base.BaseEstimator):
 
     Based on: https://scikit-learn.org/stable/developers/develop.html#rolling-your-own-estimator
     """
-
-    tree_: Node = None
-    growth_params_ = None
 
     def __init__(
         self,
@@ -411,7 +412,7 @@ class DecisionTreeTemplate(base.BaseEstimator):
         raise NotImplementedError()
 
 
-class DecisionTreeRegressor(DecisionTreeTemplate):
+class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
     """DecisionTreeRegressor
 
     Based on: https://scikit-learn.org/stable/developers/develop.html#rolling-your-own-estimator
@@ -427,6 +428,7 @@ class DecisionTreeRegressor(DecisionTreeTemplate):
     ) -> "DecisionTreeRegressor":
         self._organize_growth_parameters()
         X, y = check_X_y(X, y)
+        self.n_features_in_ = X.shape[1]
         self.tree_ = grow_tree(
             X,
             y,
@@ -437,32 +439,46 @@ class DecisionTreeRegressor(DecisionTreeTemplate):
         return self
 
     def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+        check_is_fitted(self, ("tree_", "growth_params_"))
+
         X = check_array(X)
-        check_is_fitted(self, "tree_")
+        if X.shape[1] != self.n_features_in_:
+            raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
+
         y = predict_with_tree(self.tree_, X)
 
         return y
 
 
-class DecisionTreeClassifier(DecisionTreeTemplate):
+class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
     """DecisionTreeClassifier
 
     Based on: https://scikit-learn.org/stable/developers/develop.html#rolling-your-own-estimator
     """
 
-    classes_: np.ndarray = None
-
     def __init__(self, measure_name: str = "gini", **kwargs) -> None:
         super().__init__(measure_name=measure_name, **kwargs)
+
+    def _more_tags(self) -> T.Dict[str, bool]:
+        """Describes to scikit-learn parametrize_with_checks the scope of this class
+
+        Reference: https://scikit-learn.org/stable/developers/develop.html#estimator-tags
+        """
+        return {"binary_only": True}
 
     def fit(
         self,
         X: T.Union[pd.DataFrame, np.ndarray],
         y: T.Union[pd.Series, np.ndarray],
     ) -> "DecisionTreeClassifier":
-        self._organize_growth_parameters()
         X, y = check_X_y(X, y)
+        check_classification_targets(y)
+
+        self._organize_growth_parameters()
+
+        self.n_features_in_ = X.shape[1]
         self.classes_, y = np.unique(y, return_inverse=True)
+
         self.tree_ = grow_tree(
             X,
             y,
@@ -473,10 +489,14 @@ class DecisionTreeClassifier(DecisionTreeTemplate):
         return self
 
     def predict_proba(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
-        X = check_array(X)
-        check_is_fitted(self, "tree_")
-        proba = predict_with_tree(self.tree_, X)
+        check_is_fitted(self, ("tree_", "classes_", "growth_params_"))
 
+        X = check_array(X)
+        if X.shape[1] != self.n_features_in_:
+            raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
+
+        proba = predict_with_tree(self.tree_, X)
+        proba = np.array([1 - proba, proba]).T
         return proba
 
     def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
