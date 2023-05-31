@@ -699,9 +699,36 @@ class Test_grow_tree:
             assert tree.right.is_leaf == True
 
 
-# TODO: test check_if_has_prediction
-def test_check_if_has_prediction():
-    ...
+@pytest.mark.parametrize(
+    "x,exp",
+    [
+        (np.array([-1, -1]), 0.0),
+        (np.array([1, -1]), 1.0),
+        (np.array([1, 1]), 2.0),
+        (np.array([-1, 1]), 3.0),
+    ],
+)
+def test_find_leaf_node(x: np.ndarray, exp: float):
+    tree = dtree.Node(
+        array_column=0,
+        threshold=0.0,
+        left=dtree.Node(
+            array_column=1,
+            threshold=0.0,
+            left=dtree.Node(prediction=0.0),
+            right=dtree.Node(prediction=3.0),
+        ),
+        right=dtree.Node(
+            array_column=1,
+            threshold=0.0,
+            left=dtree.Node(prediction=1.0),
+            right=dtree.Node(prediction=2.0),
+        ),
+    )
+    # line to test
+    leaf = dtree.find_leaf_node(tree, x)
+
+    assert leaf.prediction == exp
 
 
 # TODO: test predict_with_tree

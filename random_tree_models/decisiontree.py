@@ -347,24 +347,17 @@ def grow_tree(
     return new_node
 
 
-def check_if_has_prediction(node: Node) -> bool:
-    return node is not None and node.prediction is not None
+def find_leaf_node(node: Node, x: np.ndarray) -> Node:
+    "Traverses tree to find the leaf corresponding to x"
 
+    if node.is_leaf:
+        return node
 
-def find_leaf_node(tree: Node, x: np.ndarray) -> Node:
-    node = tree
-    while not node.is_leaf:
-        go_left = x[node.array_column] < node.threshold
-        if go_left:
-            if check_if_has_prediction(node.left):
-                node = node.left
-            else:
-                break
-        else:
-            if check_if_has_prediction(node.right):
-                node = node.right
-            else:
-                break
+    go_left = x[node.array_column] < node.threshold
+    if go_left:
+        node = find_leaf_node(node.left, x)
+    else:
+        node = find_leaf_node(node.right, x)
     return node
 
 
