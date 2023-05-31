@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import numpy as np
 import pytest
 from pydantic import ValidationError
@@ -486,9 +488,158 @@ class Test_find_best_split:
             assert best.threshold == threshold_exp
 
 
-# TODO: test grow_tree
-def test_grow_tree():
-    ...
+class Test_grow_tree:
+    X = np.array([[1], [2], [3]])
+    y = np.array([True, True, False])
+    target_groups = np.array([True, True, False])
+    measure_name = "gini"
+    depth_dummy = 0
+
+    def test_baselevel(self):
+        # test returned leaf node
+        growth_params = dtree.TreeGrowthParameters()
+        parent_node = None
+        is_baselevel = True
+        reason = "very custom leaf node comment"
+        with patch(
+            "random_tree_models.decisiontree.check_is_baselevel",
+            return_value=[is_baselevel, reason],
+        ) as mock_check_is_baselevel:
+            # line to test
+            leaf_node = dtree.grow_tree(
+                self.X,
+                self.y,
+                self.measure_name,
+                parent_node=parent_node,
+                depth=self.depth_dummy,
+                growth_params=growth_params,
+            )
+
+            mock_check_is_baselevel.assert_called_once()
+            assert leaf_node.is_leaf == True
+            assert leaf_node.reason == reason
+
+    def test_split_improvement_insufficient(self):
+        # test split improvement below minimum
+        growth_params = dtree.TreeGrowthParameters(min_improvement=0.2)
+        parent_score = -1.0
+        new_score = -0.9
+        best = dtree.BestSplit(
+            score=new_score,
+            column=0,
+            threshold=3.0,
+            target_groups=self.target_groups,
+        )
+        measure = dtree.SplitScore(self.measure_name, parent_score)
+        parent_node = dtree.Node(
+            array_column=0,
+            threshold=1.0,
+            prediction=0.9,
+            left=None,
+            right=None,
+            measure=measure,
+            n_obs=3,
+            reason="",
+        )
+        is_baselevel = False
+        leaf_reason = "very custom leaf node comment"
+        gain = new_score - parent_score
+        split_reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=}"
+        with (
+            patch(
+                "random_tree_models.decisiontree.check_is_baselevel",
+                return_value=[is_baselevel, leaf_reason],
+            ) as mock_check_is_baselevel,
+            patch(
+                "random_tree_models.decisiontree.find_best_split",
+                return_value=best,
+            ) as mock_find_best_split,
+        ):
+            # line to test
+            node = dtree.grow_tree(
+                self.X,
+                self.y,
+                self.measure_name,
+                parent_node=parent_node,
+                depth=self.depth_dummy,
+                growth_params=growth_params,
+            )
+
+            mock_check_is_baselevel.assert_called_once()
+            mock_find_best_split.assert_called_once()
+            assert node.reason == split_reason
+            assert node.prediction == np.mean(self.y)
+            assert node.n_obs == len(self.y)
+
+    def test_split_improvement_sufficient(self):
+        # test split improvement above minumum, leading to two leaf nodes
+        growth_params = dtree.TreeGrowthParameters(min_improvement=0.0)
+        parent_score = -1.0
+        new_score = -0.9
+        best = dtree.BestSplit(
+            score=new_score,
+            column=0,
+            threshold=3.0,
+            target_groups=self.target_groups,
+        )
+        measure = dtree.SplitScore(self.measure_name, parent_score)
+        parent_node = dtree.Node(
+            array_column=0,
+            threshold=1.0,
+            prediction=0.9,
+            left=None,
+            right=None,
+            measure=measure,
+            n_obs=3,
+            reason="",
+        )
+
+        leaf_reason = "very custom leaf node comment"
+
+        with (
+            patch(
+                "random_tree_models.decisiontree.check_is_baselevel",
+                side_effect=[
+                    (False, "bla"),
+                    (True, leaf_reason),
+                    (True, leaf_reason),
+                ],
+            ) as mock_check_is_baselevel,
+            patch(
+                "random_tree_models.decisiontree.find_best_split",
+                side_effect=[best],
+            ) as mock_find_best_split,
+        ):
+            # line to test
+            tree = dtree.grow_tree(
+                self.X,
+                self.y,
+                self.measure_name,
+                parent_node=parent_node,
+                depth=self.depth_dummy,
+                growth_params=growth_params,
+            )
+
+            assert mock_check_is_baselevel.call_count == 3
+            assert mock_find_best_split.call_count == 1
+
+            # parent
+            assert tree.reason == ""
+            assert tree.prediction == np.mean(self.y)
+            assert tree.n_obs == len(self.y)
+            assert tree.is_leaf == False
+
+            # left leaf
+            assert tree.left.reason == leaf_reason
+            assert tree.left.prediction == 1.0
+            assert tree.left.n_obs == 2
+            assert tree.left.is_leaf == True
+
+            # right leaf
+            assert tree.right.reason == leaf_reason
+            assert tree.right.prediction == 0.0
+            assert tree.right.n_obs == 1
+            assert tree.right.is_leaf == True
 
 
 # TODO: test check_if_has_prediction

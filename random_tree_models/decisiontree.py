@@ -58,7 +58,11 @@ class Node:
 def check_is_baselevel(
     y: np.ndarray, node: Node, depth: int, max_depth: int = None
 ) -> T.Tuple[bool, str]:
-    "Verifies if the tree traversal reached the baselevel / a leaf"
+    """Verifies if the tree traversal reached the baselevel / a leaf
+    * group homogeneous / cannot sensibly be splitted further
+    * no data in the group
+    * max depth reached
+    """
     if depth >= max_depth:
         return (True, "max depth reached")
     elif len(np.unique(y)) == 1:
@@ -227,26 +231,25 @@ def find_best_split(
     )
 
 
+@dataclass
+class TreeGrowthParameters:
+    max_depth: StrictInt = 42
+    min_improvement: StrictFloat = 0.0
+
+
 def grow_tree(
     X: np.ndarray,
     y: np.ndarray,
     measure_name: str,
     parent_node: Node = None,
     depth: int = 0,
-    max_depth: int = None,
-    min_improvement: float = 0.0,
+    growth_params: TreeGrowthParameters = TreeGrowthParameters(),
 ) -> Node:
     "Implementation of the Classification And Regression Tree (CART) algorithm"
 
     n_obs = len(y)
-
-    # check base level because this is a recursive function because tree:
-    # * group homogeneous / cannot sensibly be splitted further
-    # * no data in the group
-    # * max depth reached
-
     is_baselevel, reason = check_is_baselevel(
-        y, parent_node, depth, max_depth=max_depth
+        y, parent_node, depth, max_depth=growth_params.max_depth
     )
     prediction = np.mean(y) if len(y) > 0 else None
     score = (
@@ -273,11 +276,12 @@ def grow_tree(
     best = find_best_split(X, y, measure_name)
 
     # check if improvement due to split is below minimum requirement
-    is_not_good_enough = (
+    gain = best.score - parent_node.measure.value
+    is_insufficient_gain = (
         parent_node is not None
-    ) and best.score < parent_node.measure.value + min_improvement
-    if is_not_good_enough:
-        reason = f"gain due split lower than {min_improvement=}"
+    ) and gain < growth_params.min_improvement
+    if is_insufficient_gain:
+        reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=}"
         leaf_node = Node(
             array_column=None,
             threshold=None,
@@ -312,7 +316,7 @@ def grow_tree(
         measure_name=measure_name,
         parent_node=new_node,
         depth=depth + 1,
-        max_depth=max_depth,
+        growth_params=growth_params,
     )
 
     # descend right
@@ -325,7 +329,7 @@ def grow_tree(
         measure_name=measure_name,
         parent_node=new_node,
         depth=depth + 1,
-        max_depth=max_depth,
+        growth_params=growth_params,
     )
 
     return new_node
@@ -374,10 +378,22 @@ class DecisionTreeTemplate(base.BaseEstimator):
     """
 
     tree_: Node = None
+    growth_params_ = None
 
-    def __init__(self, max_depth: int, measure_name: str) -> None:
+    def __init__(
+        self,
+        measure_name: str = None,
+        max_depth: int = 2,
+        min_improvement: float = 0.0,
+    ) -> None:
         self.max_depth = max_depth
         self.measure_name = measure_name
+        self.min_improvement = min_improvement
+
+    def _organize_growth_parameters(self):
+        self.growth_params_ = TreeGrowthParameters(
+            max_depth=self.max_depth, min_improvement=self.min_improvement
+        )
 
     def fit(
         self,
@@ -396,7 +412,8 @@ class DecisionTreeRegressor(DecisionTreeTemplate):
     Based on: https://scikit-learn.org/stable/developers/develop.html#rolling-your-own-estimator
     """
 
-    tree_: Node = None
+    def __init__(self, measure_name: str = "variance", **kwargs) -> None:
+        super().__init__(measure_name=measure_name, **kwargs)
 
     def fit(
         self,
@@ -405,7 +422,10 @@ class DecisionTreeRegressor(DecisionTreeTemplate):
     ) -> "DecisionTreeRegressor":
         X, y = check_X_y(X, y)
         self.tree_ = grow_tree(
-            X, y, measure_name=self.measure_name, max_depth=self.max_depth
+            X,
+            y,
+            measure_name=self.measure_name,
+            growth_params=self.growth_params_,
         )
 
         return self
@@ -424,8 +444,10 @@ class DecisionTreeClassifier(DecisionTreeTemplate):
     Based on: https://scikit-learn.org/stable/developers/develop.html#rolling-your-own-estimator
     """
 
-    tree_: Node = None
     classes_: np.ndarray = None
+
+    def __init__(self, measure_name: str = "gini", **kwargs) -> None:
+        super().__init__(measure_name=measure_name, **kwargs)
 
     def fit(
         self,
@@ -435,7 +457,10 @@ class DecisionTreeClassifier(DecisionTreeTemplate):
         X, y = check_X_y(X, y)
         self.classes_, y = np.unique(y, return_inverse=True)
         self.tree_ = grow_tree(
-            X, y, measure_name=self.measure_name, max_depth=self.max_depth
+            X,
+            y,
+            measure_name=self.measure_name,
+            growth_params=self.growth_params_,
         )
 
         return self
