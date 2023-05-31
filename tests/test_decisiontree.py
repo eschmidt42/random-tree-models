@@ -731,9 +731,36 @@ def test_find_leaf_node(x: np.ndarray, exp: float):
     assert leaf.prediction == exp
 
 
-# TODO: test predict_with_tree
 def test_predict_with_tree():
-    ...
+    X = np.array(
+        [
+            [-1.0, -1.0],
+            [1.0, -1.0],
+            [1.0, 1.0],
+            [-1.0, 1.0],
+        ]
+    )
+    tree = dtree.Node(
+        array_column=0,
+        threshold=0.0,
+        left=dtree.Node(
+            array_column=1,
+            threshold=0.0,
+            left=dtree.Node(prediction=0.0),
+            right=dtree.Node(prediction=3.0),
+        ),
+        right=dtree.Node(
+            array_column=1,
+            threshold=0.0,
+            left=dtree.Node(prediction=1.0),
+            right=dtree.Node(prediction=2.0),
+        ),
+    )
+
+    # line to test
+    predictions = dtree.predict_with_tree(tree, X)
+
+    assert np.allclose(predictions, np.arange(0, 4, 1))
 
 
 # TODO: test DecisionTreeTemplate
