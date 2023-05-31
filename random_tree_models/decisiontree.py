@@ -237,6 +237,18 @@ class TreeGrowthParameters:
     min_improvement: StrictFloat = 0.0
 
 
+def check_if_gain_insufficient(
+    best: BestSplit, parent_node: Node, growth_params: TreeGrowthParameters
+) -> bool:
+    if parent_node is None or parent_node.measure.value is None:
+        return False, None
+
+    gain = best.score - parent_node.measure.value
+    is_insufficient_gain = gain < growth_params.min_improvement
+
+    return is_insufficient_gain, gain
+
+
 def grow_tree(
     X: np.ndarray,
     y: np.ndarray,
@@ -276,10 +288,10 @@ def grow_tree(
     best = find_best_split(X, y, measure_name)
 
     # check if improvement due to split is below minimum requirement
-    gain = best.score - parent_node.measure.value
-    is_insufficient_gain = (
-        parent_node is not None
-    ) and gain < growth_params.min_improvement
+    is_insufficient_gain, gain = check_if_gain_insufficient(
+        best, parent_node, growth_params
+    )
+
     if is_insufficient_gain:
         reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=}"
         leaf_node = Node(
@@ -420,6 +432,7 @@ class DecisionTreeRegressor(DecisionTreeTemplate):
         X: T.Union[pd.DataFrame, np.ndarray],
         y: T.Union[pd.Series, np.ndarray],
     ) -> "DecisionTreeRegressor":
+        self._organize_growth_parameters()
         X, y = check_X_y(X, y)
         self.tree_ = grow_tree(
             X,
@@ -454,6 +467,7 @@ class DecisionTreeClassifier(DecisionTreeTemplate):
         X: T.Union[pd.DataFrame, np.ndarray],
         y: T.Union[pd.Series, np.ndarray],
     ) -> "DecisionTreeClassifier":
+        self._organize_growth_parameters()
         X, y = check_X_y(X, y)
         self.classes_, y = np.unique(y, return_inverse=True)
         self.tree_ = grow_tree(
@@ -469,12 +483,14 @@ class DecisionTreeClassifier(DecisionTreeTemplate):
         X = check_array(X)
         check_is_fitted(self, "tree_")
         proba = predict_with_tree(self.tree_, X)
+
         return proba
 
     def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         proba = self.predict_proba(X)
         ix = np.argmax(proba, axis=1)
         y = self.classes_[ix]
+
         return y
 
 

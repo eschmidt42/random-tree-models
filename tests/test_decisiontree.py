@@ -488,6 +488,63 @@ class Test_find_best_split:
             assert best.threshold == threshold_exp
 
 
+@pytest.mark.parametrize(
+    "best,parent_node,growth_params,is_insufficient_exp",
+    [
+        # parent is None #1
+        (
+            dtree.BestSplit(
+                score=-1.0, column=0, threshold=0.0, target_groups=np.array([])
+            ),
+            None,
+            dtree.TreeGrowthParameters(),
+            False,
+        ),
+        # parent is None #2
+        (
+            dtree.BestSplit(
+                score=-1.0, column=0, threshold=0.0, target_groups=np.array([])
+            ),
+            dtree.Node(measure=dtree.SplitScore("bla")),
+            dtree.TreeGrowthParameters(),
+            False,
+        ),
+        # split is sufficient
+        (
+            dtree.BestSplit(
+                score=-1.0, column=0, threshold=0.0, target_groups=np.array([])
+            ),
+            dtree.Node(measure=dtree.SplitScore("bla", value=-1.1)),
+            dtree.TreeGrowthParameters(min_improvement=0.01),
+            False,
+        ),
+        # split is insufficient
+        (
+            dtree.BestSplit(
+                score=-1.0, column=0, threshold=0.0, target_groups=np.array([])
+            ),
+            dtree.Node(measure=dtree.SplitScore("bla", value=-1.1)),
+            dtree.TreeGrowthParameters(min_improvement=0.2),
+            True,
+        ),
+    ],
+)
+def test_check_if_gain_insufficient(
+    best: dtree.BestSplit,
+    parent_node: dtree.Node,
+    growth_params: dtree.TreeGrowthParameters,
+    is_insufficient_exp: bool,
+):
+    # line to test
+    is_insufficient_gain, gain = dtree.check_if_gain_insufficient(
+        best, parent_node, growth_params
+    )
+
+    assert is_insufficient_gain == is_insufficient_exp
+    if parent_node is None or parent_node.measure.value is None:
+        assert gain is None
+
+
 class Test_grow_tree:
     X = np.array([[1], [2], [3]])
     y = np.array([True, True, False])
