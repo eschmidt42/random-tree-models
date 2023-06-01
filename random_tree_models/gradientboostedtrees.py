@@ -1,6 +1,5 @@
 import math
 import typing as T
-from typing import List
 
 import numpy as np
 import pandas as pd
@@ -40,8 +39,11 @@ class GradientBoostedTreesTemplate(base.BaseEstimator):
 class GradientBoostedTreesRegressor(
     GradientBoostedTreesTemplate, base.RegressorMixin
 ):
-    """
+    """OG Gradient boosted trees regressor
+
     Friedman 2001, Greedy Function Approximation: A Gradient Boosting Machine
+    https://www.jstor.org/stable/2699986
+
     Algorithm 2 (LS_Boost)
 
     y = our continuous target
@@ -123,8 +125,11 @@ def bool_to_float(x: bool) -> float:
 class GradientBoostedTreesClassifier(
     GradientBoostedTreesTemplate, base.ClassifierMixin
 ):
-    """
+    """OG gradient boosted trees classifier
+
     Friedman 2001, Greedy Function Approximation: A Gradient Boosting Machine
+    https://www.jstor.org/stable/2699986
+
     Algorithm 5 (LK_TreeBoost)
 
     y = our binary target (assumed in paper as -1 or 1)
