@@ -3,6 +3,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 from pydantic import ValidationError
+from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.decisiontree as dtree
 
@@ -842,13 +843,10 @@ class TestDecisionTreeClassifier:
         assert (predictions == self.y).all()
 
 
-from sklearn.utils.estimator_checks import parametrize_with_checks
-
-
 @parametrize_with_checks(
     [dtree.DecisionTreeRegressor(), dtree.DecisionTreeClassifier()]
 )
-def test_estimators_with_sklearn_checks(estimator, check):
+def test_dtree_estimators_with_sklearn_checks(estimator, check):
     """Test of estimators using scikit-learn test suite
 
     Reference: https://scikit-learn.org/stable/modules/generated/sklearn.utils.estimator_checks.parametrize_with_checks.html#sklearn.utils.estimator_checks.parametrize_with_checks
