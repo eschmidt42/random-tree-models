@@ -473,6 +473,8 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
     ) -> "DecisionTreeClassifier":
         X, y = check_X_y(X, y)
         check_classification_targets(y)
+        if len(np.unique(y)) == 1:
+            raise ValueError("Cannot train with only one class present")
 
         self._organize_growth_parameters()
 
