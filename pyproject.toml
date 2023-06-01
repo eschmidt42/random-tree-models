@@ -19,6 +19,7 @@ dependencies = [
     "isort",
     "pre-commit",
     "jupyter-contrib-nbextensions",
+    "ipywidgets",
     "pandas",
     "pydantic"
 ]
