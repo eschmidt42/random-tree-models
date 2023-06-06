@@ -177,7 +177,9 @@ class GradientBoostedTreesClassifier(
     y = 1 / (1 + exp(-2*y)) # converting to probability
     """
 
-    def __init__(self, measure_name: str = "variance", **kwargs) -> None:
+    def __init__(
+        self, measure_name: str = "friedman_binary_classification", **kwargs
+    ) -> None:
         super().__init__(measure_name=measure_name, **kwargs)
 
     def _bool_to_float(self, y: np.ndarray) -> np.ndarray:
@@ -208,44 +210,26 @@ class GradientBoostedTreesClassifier(
         ym = np.mean(y)
         self.start_estimate_ = 0.5 * math.log((1 + ym) / (1 - ym))
 
-        _y = np.ones_like(y) * self.start_estimate_
+        yhat = np.ones_like(y) * self.start_estimate_
 
         for _ in track(
             range(self.n_trees), description="tree", total=self.n_trees
         ):
-            dy = 2 * y / (1 + np.exp(2 * y * _y))
+            g = (
+                2 * y / (1 + np.exp(2 * y * yhat))
+            )  # dloss/dyhat, g in the xgboost paper
 
             new_tree = dtree.DecisionTreeRegressor(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
             )
-            new_tree.fit(X, dy)
+            new_tree.fit(X, y, g=g)
             self.trees_.append(new_tree)
 
-            # collect node ids for each x
-            leaf_nodes = [dtree.find_leaf_node(new_tree.tree_, x) for x in X]
-            ids = np.array([leaf.node_id for leaf in leaf_nodes])
-
-            # log node ids and corresponding update gamma
-            gammas = {}
-            for _id in ids:
-                # dy only for current id
-                dy_for_id = np.where(ids == _id, dy, 0)
-                # gamma[m,leaf j] = (sum_i dy) / (sum_i abs(dy)*(2-abs(dy)))
-                dy_id_filtered_abs = np.abs(dy_for_id)
-                gamma = (
-                    dy_for_id.sum()
-                    / (dy_id_filtered_abs * (2 - dy_id_filtered_abs)).sum()
-                )
-                # store
-                gammas[_id] = gamma
-            # store
-            self.gammas_.append(gammas)
-
             # update _y
-            dy = np.array([gammas[_id] for _id in ids])
-            _y = _y + dy
+            g_pred = new_tree.predict(X)
+            yhat += g_pred
 
         return self
 
@@ -258,17 +242,14 @@ class GradientBoostedTreesClassifier(
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
-        y = np.ones(X.shape[0]) * self.start_estimate_
+        g = np.ones(X.shape[0]) * self.start_estimate_
 
         for m, tree in track(
             enumerate(self.trees_), description="tree", total=len(self.trees_)
         ):  # loop boosts
-            leaf_nodes = [dtree.find_leaf_node(tree.tree_, x) for x in X]
-            ids = np.array([leaf.node_id for leaf in leaf_nodes])
-            dy = np.array([self.gammas_[m][_id] for _id in ids])
-            y += dy
+            g += tree.predict(X)
 
-        proba = 1 / (1 + np.exp(-2.0 * y))
+        proba = 1 / (1 + np.exp(-2.0 * g))
         proba = np.array([1 - proba, proba]).T
         return proba
 

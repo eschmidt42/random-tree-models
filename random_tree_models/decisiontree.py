@@ -2,6 +2,7 @@ import typing as T
 import uuid
 from enum import Enum
 from functools import partial
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -82,7 +83,7 @@ def check_y_and_target_groups(y: np.ndarray, target_groups: np.ndarray = None):
         raise ValueError(f"{y.shape=} != {target_groups.shape=}")
 
 
-def calc_variance(y: np.ndarray, target_groups: np.ndarray) -> float:
+def calc_variance(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
     """Calculates the variance of a split"""
 
     check_y_and_target_groups(y, target_groups=target_groups)
@@ -124,7 +125,7 @@ def entropy(y: np.ndarray) -> float:
     return h
 
 
-def calc_entropy(y: np.ndarray, target_groups: np.ndarray) -> float:
+def calc_entropy(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
     """Calculates the entropy of a split"""
 
     check_y_and_target_groups(y, target_groups=target_groups)
@@ -162,7 +163,9 @@ def gini_impurity(y: np.ndarray) -> float:
     return -g
 
 
-def calc_gini_impurity(y: np.ndarray, target_groups: np.ndarray) -> float:
+def calc_gini_impurity(
+    y: np.ndarray, target_groups: np.ndarray, **kwargs
+) -> float:
     """Calculates the gini impurity of a split
 
     Based on: https://scikit-learn.org/stable/modules/tree.html#classification-criteria
@@ -185,9 +188,19 @@ class SplitScoreMetrics(Enum):
     variance = partial(calc_variance)
     entropy = partial(calc_entropy)
     gini = partial(calc_gini_impurity)
+    # variance for split score because Friedman et al. 2001 in Algorithm 1
+    # step 4 minimize the squared error between actual and predicted dloss/dyhat
+    friedman_binary_classification = partial(calc_variance)
 
-    def __call__(self, y: np.ndarray, target_groups: np.ndarray) -> float:
-        return self.value(y, target_groups)
+    def __call__(
+        self,
+        y: np.ndarray,
+        target_groups: np.ndarray,
+        yhat: np.ndarray = None,
+        g: np.ndarray = None,
+        h: np.ndarray = None,
+    ) -> float:
+        return self.value(y, target_groups, yhat=yhat, g=g, h=h)
 
 
 @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
@@ -199,8 +212,14 @@ class BestSplit:
 
 
 def find_best_split(
-    X: np.ndarray, y: np.ndarray, measure_name: str
+    X: np.ndarray,
+    y: np.ndarray,
+    measure_name: str,
+    yhat: np.ndarray = None,
+    g: np.ndarray = None,
+    h: np.ndarray = None,
 ) -> BestSplit:
+    """ """
     if len(np.unique(y)) == 1:
         raise ValueError(
             f"Tried to find a split for homogenous y: {y[:3]} ... {y[-3:]}"
@@ -216,7 +235,9 @@ def find_best_split(
 
         for threshold in feature_values[1:]:
             target_groups = feature_values < threshold
-            split_score = SplitScoreMetrics[measure_name](y, target_groups)
+            split_score = SplitScoreMetrics[measure_name](
+                y, target_groups, yhat=yhat, g=g, h=h
+            )
             if best_score is None or split_score > best_score:
                 best_score = split_score
                 best_column = array_column
@@ -249,34 +270,119 @@ def check_if_gain_insufficient(
     return is_insufficient_gain, gain
 
 
+def leaf_weight_mean(
+    y: np.ndarray, growth_params: TreeGrowthParameters, **kwargs
+) -> float:
+    return np.mean(y)
+
+
+def leaf_weight_binary_classification_friedman2001(
+    y: np.ndarray, growth_params: TreeGrowthParameters, g: np.ndarray, **kwargs
+) -> float:
+    "Computes optimal leaf weight as in Friedman et al. 2001 Algorithm 5"
+
+    g_abs = np.abs(g)
+    gamma_jm = g.sum() / (g_abs * (2 - g_abs)).sum()
+    return gamma_jm
+
+
+# def leaf_weight_binary_classification_xgboost(y:np.ndarray, growth_params:TreeGrowthParameters) -> float:
+#     "Computes optimal leaf weight as in Chen et al. 2016 equation 5"
+
+#     y_abs = np.abs(y)
+#     gamma_jm = (
+#         y.sum()
+#         / (y_abs * (2 - y_abs)).sum()
+#     )
+#     return gamma_jm
+
+
+class LeafWeightSchemes(Enum):
+    # https://stackoverflow.com/questions/40338652/how-to-define-enum-values-that-are-functions
+    friedman_binary_classification = partial(
+        leaf_weight_binary_classification_friedman2001
+    )
+    variance = partial(leaf_weight_mean)
+    entropy = partial(leaf_weight_mean)
+    gini = partial(leaf_weight_mean)
+
+    def __call__(
+        self,
+        y: np.ndarray,
+        growth_params: TreeGrowthParameters,
+        g: np.ndarray = None,
+        h: np.ndarray = None,
+    ) -> float:
+        return self.value(y, growth_params, g=g, h=h)
+
+
+def calc_leaf_weight(
+    y: np.ndarray,
+    measure_name: str,
+    growth_params: TreeGrowthParameters,
+    g: np.ndarray = None,
+    h: np.ndarray = None,
+) -> np.ndarray:
+    """Calculates the leaf weight, depending on the choice of measure_name.
+
+    This computation assumes all y values are part of the same leaf.
+    """
+
+    # TODO: enable choice of other aggregations / handling of multi class cases
+    if len(y) == 0:
+        return None
+
+    weight_func = LeafWeightSchemes[measure_name]
+    leaf_weights = weight_func(y, growth_params, g=g, h=h)
+
+    return leaf_weights
+
+
 def grow_tree(
     X: np.ndarray,
     y: np.ndarray,
     measure_name: str,
+    yhat: np.ndarray = None,
     parent_node: Node = None,
     depth: int = 0,
     growth_params: TreeGrowthParameters = TreeGrowthParameters(),
+    g: np.ndarray = None,
+    h: np.ndarray = None,
+    **kwargs,
 ) -> Node:
-    "Implementation of the Classification And Regression Tree (CART) algorithm"
+    """Implementation of the Classification And Regression Tree (CART) algorithm
+
+    y - what the tree tries to estimate
+    yhat - previous best estimate
+    g - dloss/dyhat - first derivative of loss(y,yhat)
+    h - d^2loss/dyhat^2 - second derivative of loss(y,yhat)
+
+    Some confusion that may arise: This function is used directly for decision trees
+    but also for boosting. In boosting what is to be predicted is actually g (dloss/dy_hat)
+    of loss(y,yhat). So the leaf weight to use for prediction may need additional transformation.
+    But this is handled on the level of the class that called this function, e.g. GradientBoostedTreesClassifier.
+    """
 
     n_obs = len(y)
     is_baselevel, reason = check_is_baselevel(
         y, parent_node, depth, max_depth=growth_params.max_depth
     )
-    # TODO: enable choice of other aggregations / handling of multi class cases
-    prediction = np.mean(y) if len(y) > 0 else None
-    score = (
-        SplitScoreMetrics[measure_name](y, np.ones_like(y, dtype=bool))
-        if len(y) > 0
-        else None
-    )
+
+    leaf_weight, yhat, score = None, None, None
+    if len(y) > 0:
+        leaf_weight = calc_leaf_weight(y, measure_name, growth_params, g=g, h=h)
+        yhat = leaf_weight * np.ones_like(y)
+        score = SplitScoreMetrics[measure_name](
+            y, np.ones_like(y, dtype=bool), yhat=yhat, g=g, h=h
+        )
+
     measure = SplitScore(measure_name, score=score)
 
     if is_baselevel:
         leaf_node = Node(
             array_column=None,
             threshold=None,
-            prediction=prediction,
+            prediction=leaf_weight,
             left=None,
             right=None,
             measure=measure,
@@ -286,7 +392,7 @@ def grow_tree(
         return leaf_node
 
     # find best split
-    best = find_best_split(X, y, measure_name)
+    best = find_best_split(X, y, measure_name, g=g, h=h)
 
     # check if improvement due to split is below minimum requirement
     is_insufficient_gain, gain = check_if_gain_insufficient(
@@ -298,7 +404,7 @@ def grow_tree(
         leaf_node = Node(
             array_column=None,
             threshold=None,
-            prediction=prediction,
+            prediction=leaf_weight,
             left=None,
             right=None,
             measure=measure,
@@ -311,7 +417,7 @@ def grow_tree(
     new_node = Node(
         array_column=best.column,
         threshold=best.threshold,
-        prediction=prediction,
+        prediction=leaf_weight,
         left=None,
         right=None,
         measure=measure,
@@ -323,6 +429,8 @@ def grow_tree(
     mask_left = best.target_groups == True
     X_left = X[mask_left, :]
     y_left = y[mask_left]
+    g_left = g[mask_left] if g is not None else None
+    h_left = h[mask_left] if h is not None else None
     new_node.left = grow_tree(
         X_left,
         y_left,
@@ -330,12 +438,16 @@ def grow_tree(
         parent_node=new_node,
         depth=depth + 1,
         growth_params=growth_params,
+        g=g_left,
+        h=h_left,
     )
 
     # descend right
     mask_right = best.target_groups == False
     X_right = X[mask_right, :]
     y_right = y[mask_right]
+    g_right = g[mask_right] if g is not None else None
+    h_right = h[mask_right] if h is not None else None
     new_node.right = grow_tree(
         X_right,
         y_right,
@@ -343,6 +455,8 @@ def grow_tree(
         parent_node=new_node,
         depth=depth + 1,
         growth_params=growth_params,
+        g=g_right,
+        h=h_right,
     )
 
     return new_node
@@ -425,6 +539,7 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
         self,
         X: T.Union[pd.DataFrame, np.ndarray],
         y: T.Union[pd.Series, np.ndarray],
+        **kwargs,
     ) -> "DecisionTreeRegressor":
         self._organize_growth_parameters()
         X, y = check_X_y(X, y)
@@ -434,6 +549,7 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
             y,
             measure_name=self.measure_name,
             growth_params=self.growth_params_,
+            **kwargs,
         )
 
         return self
