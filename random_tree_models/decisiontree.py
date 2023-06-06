@@ -56,6 +56,13 @@ class Node:
         return self.left is None and self.right is None
 
 
+@dataclass
+class TreeGrowthParameters:
+    max_depth: StrictInt = 42
+    min_improvement: StrictFloat = 0.0
+    lam: StrictFloat = 0.0
+
+
 def check_is_baselevel(
     y: np.ndarray, node: Node, depth: int, max_depth: int = None
 ) -> T.Tuple[bool, str]:
@@ -183,6 +190,52 @@ def calc_gini_impurity(
     return g
 
 
+def xgboost_split_score(
+    g: np.ndarray, h: np.ndarray, growth_params: TreeGrowthParameters
+) -> float:
+    "Equation 7 in Chen et al 2016, XGBoost: A Scalable Tree Boosting System"
+    top = g.sum()
+    top = top * top
+
+    bottom = (h + growth_params.lam).sum()
+
+    score = top / bottom
+    return -score
+
+
+def calc_xgboost_split_score(
+    y: np.ndarray,
+    target_groups: np.ndarray,
+    g: np.ndarray,
+    h: np.ndarray,
+    growth_params: TreeGrowthParameters,
+    **kwargs,
+) -> float:
+    """Calculates the gini impurity of a split
+
+    Based on: https://scikit-learn.org/stable/modules/tree.html#classification-criteria
+    """
+
+    check_y_and_target_groups(y, target_groups=target_groups)
+
+    n_left = target_groups.sum()
+    n_right = len(target_groups) - n_left
+
+    score_left = (
+        xgboost_split_score(g[target_groups], h[target_groups], growth_params)
+        if n_left > 0
+        else 0
+    )
+    score_right = (
+        xgboost_split_score(g[~target_groups], h[~target_groups], growth_params)
+        if n_right > 0
+        else 0
+    )
+
+    score = score_left + score_right
+    return score
+
+
 class SplitScoreMetrics(Enum):
     # https://stackoverflow.com/questions/40338652/how-to-define-enum-values-that-are-functions
     variance = partial(calc_variance)
@@ -191,6 +244,7 @@ class SplitScoreMetrics(Enum):
     # variance for split score because Friedman et al. 2001 in Algorithm 1
     # step 4 minimize the squared error between actual and predicted dloss/dyhat
     friedman_binary_classification = partial(calc_variance)
+    xgboost = partial(calc_xgboost_split_score)
 
     def __call__(
         self,
@@ -199,8 +253,11 @@ class SplitScoreMetrics(Enum):
         yhat: np.ndarray = None,
         g: np.ndarray = None,
         h: np.ndarray = None,
+        growth_params: TreeGrowthParameters = None,
     ) -> float:
-        return self.value(y, target_groups, yhat=yhat, g=g, h=h)
+        return self.value(
+            y, target_groups, yhat=yhat, g=g, h=h, growth_params=growth_params
+        )
 
 
 @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
@@ -218,6 +275,7 @@ def find_best_split(
     yhat: np.ndarray = None,
     g: np.ndarray = None,
     h: np.ndarray = None,
+    growth_params: TreeGrowthParameters = None,
 ) -> BestSplit:
     """ """
     if len(np.unique(y)) == 1:
@@ -236,7 +294,12 @@ def find_best_split(
         for threshold in feature_values[1:]:
             target_groups = feature_values < threshold
             split_score = SplitScoreMetrics[measure_name](
-                y, target_groups, yhat=yhat, g=g, h=h
+                y,
+                target_groups,
+                yhat=yhat,
+                g=g,
+                h=h,
+                growth_params=growth_params,
             )
             if best_score is None or split_score > best_score:
                 best_score = split_score
@@ -250,12 +313,6 @@ def find_best_split(
         float(best_threshold),
         best_target_groups,
     )
-
-
-@dataclass
-class TreeGrowthParameters:
-    max_depth: StrictInt = 42
-    min_improvement: StrictFloat = 0.0
 
 
 def check_if_gain_insufficient(
@@ -286,15 +343,17 @@ def leaf_weight_binary_classification_friedman2001(
     return gamma_jm
 
 
-# def leaf_weight_binary_classification_xgboost(y:np.ndarray, growth_params:TreeGrowthParameters) -> float:
-#     "Computes optimal leaf weight as in Chen et al. 2016 equation 5"
+def leaf_weight_xgboost(
+    y: np.ndarray,
+    growth_params: TreeGrowthParameters,
+    g: np.ndarray,
+    h: np.ndarray,
+    **kwargs,
+) -> float:
+    "Computes optimal leaf weight as in Chen et al. 2016 equation 5"
 
-#     y_abs = np.abs(y)
-#     gamma_jm = (
-#         y.sum()
-#         / (y_abs * (2 - y_abs)).sum()
-#     )
-#     return gamma_jm
+    w = -g.sum() / (h + growth_params.lam).sum()
+    return w
 
 
 class LeafWeightSchemes(Enum):
@@ -305,6 +364,7 @@ class LeafWeightSchemes(Enum):
     variance = partial(leaf_weight_mean)
     entropy = partial(leaf_weight_mean)
     gini = partial(leaf_weight_mean)
+    xgboost = partial(leaf_weight_xgboost)
 
     def __call__(
         self,
@@ -345,7 +405,7 @@ def grow_tree(
     yhat: np.ndarray = None,
     parent_node: Node = None,
     depth: int = 0,
-    growth_params: TreeGrowthParameters = TreeGrowthParameters(),
+    growth_params: TreeGrowthParameters = None,
     g: np.ndarray = None,
     h: np.ndarray = None,
     **kwargs,
@@ -373,7 +433,12 @@ def grow_tree(
         leaf_weight = calc_leaf_weight(y, measure_name, growth_params, g=g, h=h)
         yhat = leaf_weight * np.ones_like(y)
         score = SplitScoreMetrics[measure_name](
-            y, np.ones_like(y, dtype=bool), yhat=yhat, g=g, h=h
+            y,
+            np.ones_like(y, dtype=bool),
+            yhat=yhat,
+            g=g,
+            h=h,
+            growth_params=growth_params,
         )
 
     measure = SplitScore(measure_name, score=score)
@@ -392,7 +457,9 @@ def grow_tree(
         return leaf_node
 
     # find best split
-    best = find_best_split(X, y, measure_name, g=g, h=h)
+    best = find_best_split(
+        X, y, measure_name, g=g, h=h, growth_params=growth_params
+    )
 
     # check if improvement due to split is below minimum requirement
     is_insufficient_gain, gain = check_if_gain_insufficient(
@@ -505,15 +572,15 @@ class DecisionTreeTemplate(base.BaseEstimator):
         measure_name: str = None,
         max_depth: int = 2,
         min_improvement: float = 0.0,
+        lam: float = 0.0,
     ) -> None:
         self.max_depth = max_depth
         self.measure_name = measure_name
         self.min_improvement = min_improvement
+        self.lam = lam
 
     def _organize_growth_parameters(self):
-        self.growth_params_ = TreeGrowthParameters(
-            max_depth=self.max_depth, min_improvement=self.min_improvement
-        )
+        self.growth_params_ = TreeGrowthParameters(**self.get_params())
 
     def fit(
         self,
