@@ -29,10 +29,11 @@ class XGBoostTemplate(base.BaseEstimator):
     def __init__(
         self,
         n_trees: int = 3,
-        measure_name: str = None,
+        measure_name: str = "xgboost",
         max_depth: int = 2,
         min_improvement: float = 0.0,
         lam: float = 0.0,
+        force_all_finite: bool = True,
     ) -> None:
         self.n_trees = n_trees
         self.measure_name = measure_name
@@ -40,6 +41,7 @@ class XGBoostTemplate(base.BaseEstimator):
         self.min_improvement = min_improvement
         self.n_trees = n_trees
         self.lam = lam
+        self.force_all_finite = force_all_finite
 
     def fit(
         self,
@@ -68,11 +70,8 @@ class XGBoostRegressor(XGBoostTemplate, base.RegressorMixin):
     https://dl.acm.org/doi/10.1145/2939672.2939785
     """
 
-    def __init__(self, measure_name: str = "xgboost", **kwargs) -> None:
-        super().__init__(measure_name=measure_name, **kwargs)
-
     def fit(self, X: np.ndarray, y: np.ndarray) -> "XGBoostRegressor":
-        X, y = check_X_y(X, y)
+        X, y = check_X_y(X, y, force_all_finite=self.force_all_finite)
         self.n_features_in_ = X.shape[1]
 
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
@@ -93,6 +92,7 @@ class XGBoostRegressor(XGBoostTemplate, base.RegressorMixin):
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
                 lam=self.lam,
+                force_all_finite=self.force_all_finite,
             )
             new_tree.fit(X, y, g=g, h=h)
             self.trees_.append(new_tree)
@@ -104,7 +104,7 @@ class XGBoostRegressor(XGBoostTemplate, base.RegressorMixin):
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("trees_", "n_features_in_", "start_estimate_"))
-        X = check_array(X)
+        X = check_array(X, force_all_finite=self.force_all_finite)
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
@@ -158,9 +158,6 @@ class XGBoostClassifier(XGBoostTemplate, base.ClassifierMixin):
     https://dl.acm.org/doi/10.1145/2939672.2939785
     """
 
-    def __init__(self, measure_name: str = "xgboost", **kwargs) -> None:
-        super().__init__(measure_name=measure_name, **kwargs)
-
     def _bool_to_float(self, y: np.ndarray) -> np.ndarray:
         f = np.vectorize(gbt.bool_to_float)
         return f(y)
@@ -173,7 +170,7 @@ class XGBoostClassifier(XGBoostTemplate, base.ClassifierMixin):
         return {"binary_only": True}
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "XGBoostClassifier":
-        X, y = check_X_y(X, y)
+        X, y = check_X_y(X, y, force_all_finite=self.force_all_finite)
         check_classification_targets(y)
         if len(np.unique(y)) == 1:
             raise ValueError("Cannot train with only one class present")
@@ -200,6 +197,7 @@ class XGBoostClassifier(XGBoostTemplate, base.ClassifierMixin):
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
                 lam=self.lam,
+                force_all_finite=self.force_all_finite,
             )
             new_tree.fit(X, y, g=g, h=h)
             self.trees_.append(new_tree)
@@ -214,7 +212,7 @@ class XGBoostClassifier(XGBoostTemplate, base.ClassifierMixin):
             self, ("trees_", "classes_", "gammas_", "n_features_in_")
         )
 
-        X = check_array(X)
+        X = check_array(X, force_all_finite=self.force_all_finite)
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 

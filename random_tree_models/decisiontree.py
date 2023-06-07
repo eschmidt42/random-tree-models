@@ -36,6 +36,7 @@ class Node:
     array_column: StrictInt = None  # index of the column to use
     threshold: float = None  # threshold for decision
     prediction: float = None  # value to use for predictions
+    default_is_left: bool = None  # default direction is x is nan
 
     # decendants
     left: "Node" = None  # left decendant of type Node
@@ -272,6 +273,7 @@ class BestSplit:
     column: StrictInt
     threshold: StrictFloat
     target_groups: np.ndarray = Field(default_factory=lambda: np.zeros(10))
+    default_is_left: StrictBool = None
 
 
 def find_best_split(
@@ -293,32 +295,74 @@ def find_best_split(
     best_column = None
     best_threshold = None
     best_target_groups = None
+    best_default_direction_is_left = None
 
     for array_column in range(X.shape[1]):
         feature_values = X[:, array_column]
+        is_missing = np.isnan(feature_values)
+        is_finite = np.logical_not(is_missing)
 
-        for threshold in feature_values[1:]:
-            target_groups = feature_values < threshold
-            split_score = SplitScoreMetrics[measure_name](
-                y,
-                target_groups,
-                yhat=yhat,
-                g=g,
-                h=h,
-                growth_params=growth_params,
-            )
+        # if there are no nans
+        if is_finite.all():
+            for threshold in feature_values[1:]:
+                target_groups = feature_values < threshold
+                split_score = SplitScoreMetrics[measure_name](
+                    y,
+                    target_groups,
+                    yhat=yhat,
+                    g=g,
+                    h=h,
+                    growth_params=growth_params,
+                )
 
-            if best_score is None or split_score > best_score:
-                best_score = split_score
-                best_column = array_column
-                best_threshold = threshold
-                best_target_groups = target_groups
+                if best_score is None or split_score > best_score:
+                    best_score = split_score
+                    best_column = array_column
+                    best_threshold = threshold
+                    best_target_groups = target_groups
+
+        else:  # there are nans
+            finite_feature_values = feature_values[is_finite]
+
+            for threshold in finite_feature_values[1:]:
+                # shuffling all missing left and right and comparing what "default direction" optimizes the loss.
+                # so either left of the threshold includes or excludes missing values.
+                # based on Chen et al. 2016, XGBoost: A Scalable Tree Boosting System
+                # algorithm 3, sparsity-aware split finding
+                for default_direction_left in [True, False]:
+                    if (
+                        default_direction_left
+                    ):  # feature value <= threshold or missing
+                        target_groups = np.logical_or(
+                            feature_values < threshold, is_missing
+                        )
+                    else:  # feature value <= threshold and finite
+                        target_groups = np.logical_and(
+                            feature_values < threshold, is_finite
+                        )
+
+                    split_score = SplitScoreMetrics[measure_name](
+                        y,
+                        target_groups,
+                        yhat=yhat,
+                        g=g,
+                        h=h,
+                        growth_params=growth_params,
+                    )
+
+                    if best_score is None or split_score > best_score:
+                        best_score = split_score
+                        best_column = array_column
+                        best_threshold = threshold
+                        best_target_groups = target_groups
+                        best_default_direction_is_left = default_direction_left
 
     return BestSplit(
         float(best_score),
         int(best_column),
         float(best_threshold),
         best_target_groups,
+        best_default_direction_is_left,
     )
 
 
@@ -454,6 +498,7 @@ def grow_tree(
             array_column=None,
             threshold=None,
             prediction=leaf_weight,
+            default_is_left=None,
             left=None,
             right=None,
             measure=measure,
@@ -478,6 +523,7 @@ def grow_tree(
             array_column=None,
             threshold=None,
             prediction=leaf_weight,
+            default_is_left=None,
             left=None,
             right=None,
             measure=measure,
@@ -491,6 +537,7 @@ def grow_tree(
         array_column=best.column,
         threshold=best.threshold,
         prediction=leaf_weight,
+        default_is_left=best.default_is_left,
         left=None,
         right=None,
         measure=measure,
@@ -541,7 +588,15 @@ def find_leaf_node(node: Node, x: np.ndarray) -> Node:
     if node.is_leaf:
         return node
 
-    go_left = x[node.array_column] < node.threshold
+    is_missing = np.isnan(x[node.array_column])
+    if is_missing:
+        go_left = node.default_is_left
+        if go_left is None:
+            raise ValueError(
+                f"{x[node.array_column]=} is missing but was not observed as a feature that can be missing during training."
+            )
+    else:
+        go_left = x[node.array_column] < node.threshold
     if go_left:
         node = find_leaf_node(node.left, x)
     else:
@@ -605,8 +660,14 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
     Based on: https://scikit-learn.org/stable/developers/develop.html#rolling-your-own-estimator
     """
 
-    def __init__(self, measure_name: str = "variance", **kwargs) -> None:
+    def __init__(
+        self,
+        measure_name: str = "variance",
+        force_all_finite: bool = True,
+        **kwargs,
+    ) -> None:
         super().__init__(measure_name=measure_name, **kwargs)
+        self.force_all_finite = force_all_finite
 
     def fit(
         self,
@@ -615,7 +676,7 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
         **kwargs,
     ) -> "DecisionTreeRegressor":
         self._organize_growth_parameters()
-        X, y = check_X_y(X, y)
+        X, y = check_X_y(X, y, force_all_finite=self.force_all_finite)
         self.n_features_in_ = X.shape[1]
         self.tree_ = grow_tree(
             X,
@@ -630,7 +691,7 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
     def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         check_is_fitted(self, ("tree_", "growth_params_"))
 
-        X = check_array(X)
+        X = check_array(X, force_all_finite=self.force_all_finite)
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
@@ -645,8 +706,14 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
     Based on: https://scikit-learn.org/stable/developers/develop.html#rolling-your-own-estimator
     """
 
-    def __init__(self, measure_name: str = "gini", **kwargs) -> None:
+    def __init__(
+        self,
+        measure_name: str = "gini",
+        force_all_finite: bool = True,
+        **kwargs,
+    ) -> None:
         super().__init__(measure_name=measure_name, **kwargs)
+        self.force_all_finite = force_all_finite
 
     def _more_tags(self) -> T.Dict[str, bool]:
         """Describes to scikit-learn parametrize_with_checks the scope of this class
@@ -660,7 +727,7 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
         X: T.Union[pd.DataFrame, np.ndarray],
         y: T.Union[pd.Series, np.ndarray],
     ) -> "DecisionTreeClassifier":
-        X, y = check_X_y(X, y)
+        X, y = check_X_y(X, y, force_all_finite=self.force_all_finite)
         check_classification_targets(y)
         if len(np.unique(y)) == 1:
             raise ValueError("Cannot train with only one class present")
@@ -682,7 +749,7 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
     def predict_proba(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         check_is_fitted(self, ("tree_", "classes_", "growth_params_"))
 
-        X = check_array(X)
+        X = check_array(X, force_all_finite=self.force_all_finite)
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
