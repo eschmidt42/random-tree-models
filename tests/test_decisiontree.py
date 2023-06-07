@@ -317,7 +317,96 @@ def test_calc_gini_impurity(
         assert g == g_exp
 
 
+@pytest.mark.parametrize(
+    "g,h,is_bad",
+    [
+        (np.array([]), np.array([]), True),
+        (np.array([1]), np.array([1]), False),
+        (np.array([1]), np.array([1, 2]), True),
+        (np.array([1, 2]), np.array([1]), True),
+        (np.array([1, 2]), np.array([1, 2]), False),
+    ],
+)
+def test_xgboost_split_score(g: np.ndarray, h: np.ndarray, is_bad: bool):
+    growth_params = dtree.TreeGrowthParameters(lam=0.0)
+    try:
+        # line to test
+        score = dtree.xgboost_split_score(g, h, growth_params)
+    except ValueError as ex:
+        if is_bad:
+            pytest.xfail(
+                "xgboost_split_score properly failed because of empty g or h"
+            )
+        else:
+            raise ex
+    else:
+        if is_bad:
+            pytest.fail(
+                "xgboost_split_score should have failed due to empty g or h but didn't"
+            )
+
+        assert np.less_equal(score, 0)
+
+
+@pytest.mark.parametrize(
+    "g, h, target_groups, score_exp",
+    [
+        # failure cases
+        (np.array([]), np.array([]), np.array([]), None),
+        (np.array([1]), np.array([-1.0]), np.array([False, True]), None),
+        # regression cases - least squares - no split worse than with split
+        (
+            np.array([-0.5, 0.5]),
+            np.array([-1.0, -1.0]),
+            np.array([True, False]),
+            0.5,
+        ),  # with split
+        (
+            np.array([-1.0, 1.0]),
+            np.array([-1.0, -1.0]),
+            np.array([False, False]),
+            0.0,
+        ),  # without split
+        # classification cases - binomial log-likelihood
+        (
+            np.array([-1.0, 1.0]),
+            np.array([-1.0, -1.0]),
+            np.array([True, False]),
+            2.0,
+        ),  # with split
+        (
+            np.array([-1.0, 1.0]),
+            np.array([-1.0, -1.0]),
+            np.array([False, False]),
+            0.0,
+        ),  # without split
+    ],
+)
+def test_calc_xgboost_split_score(
+    g: np.ndarray, h: np.ndarray, target_groups: np.ndarray, score_exp: float
+):
+    growth_params = dtree.TreeGrowthParameters(lam=0.0)
+    y = None
+    try:
+        # line to test
+        score = dtree.calc_xgboost_split_score(
+            y, target_groups, g, h, growth_params
+        )
+    except ValueError as ex:
+        if score_exp is None:
+            pytest.xfail("Properly raised error calculating the xgboost score")
+        else:
+            raise ex
+    else:
+        if score_exp is None:
+            pytest.fail(
+                "calc_xgboost_split_score should have failed but didn't"
+            )
+        assert score == score_exp
+
+
 class TestSplitScoreMetrics:
+    "Redudancy test - calling calc_xgboost_split_score etc via SplitScoreMetrics needs to yield the same values as in the test above."
     y = np.array([1, 1, 2, 2])
     target_groups = np.array([False, True, False, True])
 
@@ -336,6 +425,60 @@ class TestSplitScoreMetrics:
     def test_variance(self):
         var = dtree.SplitScoreMetrics["variance"](self.y, self.target_groups)
         assert var == self.var_exp
+
+    def test_friedman_binary_classification(self):
+        var = dtree.SplitScoreMetrics["friedman_binary_classification"](
+            self.y, self.target_groups
+        )
+        assert var == self.var_exp
+
+    @pytest.mark.parametrize(
+        "g, h, target_groups, score_exp",
+        [
+            # regression cases - least squares - no split worse than with split
+            (
+                np.array([-0.5, 0.5]),
+                np.array([-1.0, -1.0]),
+                np.array([True, False]),
+                0.5,
+            ),  # with split
+            (
+                np.array([-1.0, 1.0]),
+                np.array([-1.0, -1.0]),
+                np.array([False, False]),
+                0.0,
+            ),  # without split
+            # classification cases - binomial log-likelihood
+            (
+                np.array([-1.0, 1.0]),
+                np.array([-1.0, -1.0]),
+                np.array([True, False]),
+                2.0,
+            ),  # with split
+            (
+                np.array([-1.0, 1.0]),
+                np.array([-1.0, -1.0]),
+                np.array([False, False]),
+                0.0,
+            ),  # without split
+        ],
+    )
+    def test_xgboost(
+        self,
+        g: np.ndarray,
+        h: np.ndarray,
+        target_groups: np.ndarray,
+        score_exp: float,
+    ):
+        growth_params = dtree.TreeGrowthParameters(lam=0.0)
+        y = None
+
+        # line to test
+        score = dtree.calc_xgboost_split_score(
+            y, target_groups, g, h, growth_params
+        )
+
+        assert score == score_exp
 
 
 @pytest.mark.parametrize(
@@ -423,26 +566,58 @@ class Test_find_best_split:
     y_2reg = np.array([-1.0, -1.0, 1.0, 1.0])
     y_3reg = np.array([-1.0, -0.9, 1.0, 2.0])
 
+    # xgboost - least squares
+    g_1reg = np.array([0.0, 0.0, 0.0, 0.0])
+    g_2reg = np.array([-1.0, -1.0, 1.0, 1.0])
+    g_3reg = np.array([-1.275, -1.175, 0.725, 1.725])
+
+    h_1reg = np.array([-1.0, -1.0, -1.0, -1.0])
+    h_2reg = np.array([-1.0, -1.0, -1.0, -1.0])
+    h_3reg = np.array([-1.0, -1.0, -1.0, -1.0])
+
+    # xgboost - binomial log-likelihood
+    g_2class = np.array([-1.0, -1.0, 1.0, 1.0])
+    h_2class = np.array([-1.0, -1.0, -1.0, -1.0])
+
     @pytest.mark.parametrize(
-        "y,ix,measure_name",
+        "y,ix,measure_name,g,h",
         [
-            (y_1class, None, "gini"),
-            (y_2class, 2, "gini"),
-            (y_3class, 2, "gini"),
-            (y_1class, None, "entropy"),
-            (y_2class, 2, "entropy"),
-            (y_3class, 2, "entropy"),
-            (y_1reg, None, "variance"),
-            (y_2reg, 2, "variance"),
-            (y_3reg, 2, "variance"),
+            (y_1class, None, "gini", None, None),
+            (y_2class, 2, "gini", None, None),
+            (y_3class, 2, "gini", None, None),
+            (y_1class, None, "entropy", None, None),
+            (y_2class, 2, "entropy", None, None),
+            (y_3class, 2, "entropy", None, None),
+            (y_1reg, None, "variance", None, None),
+            (y_2reg, 2, "variance", None, None),
+            (y_3reg, 2, "variance", None, None),
+            (y_1reg, None, "xgboost", g_1reg, h_1reg),
+            (y_2reg, 2, "xgboost", g_2reg, h_2reg),
+            (y_3reg, 2, "xgboost", g_3reg, h_3reg),
+            # (y_1class, None, "xgboost", g_1class, h_1class), # currently not handled
+            (y_2class, 2, "xgboost", g_2class, h_2class),
+            # (y_3class, 2, "xgboost", g_3class, h_3class), # currently not handled
         ],
     )
-    def test_1d(self, y: np.ndarray, ix: int, measure_name: str):
+    def test_1d(
+        self,
+        y: np.ndarray,
+        ix: int,
+        measure_name: str,
+        g: np.ndarray,
+        h: np.ndarray,
+    ):
         is_homogenous = len(np.unique(y)) == 1
+        grow_params = dtree.TreeGrowthParameters()
         try:
             # line to test
             best = dtree.find_best_split(
-                self.X_1D, y, measure_name=measure_name
+                self.X_1D,
+                y,
+                measure_name=measure_name,
+                g=g,
+                h=h,
+                growth_params=grow_params,
             )
         except ValueError as ex:
             if is_homogenous:
@@ -457,24 +632,45 @@ class Test_find_best_split:
             assert best.threshold == threshold_exp
 
     @pytest.mark.parametrize(
-        "y,ix,measure_name",
+        "y,ix,measure_name,g,h",
         [
-            (y_1class, None, "gini"),
-            (y_2class, 2, "gini"),
-            (y_3class, 2, "gini"),
-            (y_1class, None, "entropy"),
-            (y_2class, 2, "entropy"),
-            (y_3class, 2, "entropy"),
-            (y_1reg, None, "variance"),
-            (y_2reg, 2, "variance"),
-            (y_3reg, 2, "variance"),
+            (y_1class, None, "gini", None, None),
+            (y_2class, 2, "gini", None, None),
+            (y_3class, 2, "gini", None, None),
+            (y_1class, None, "entropy", None, None),
+            (y_2class, 2, "entropy", None, None),
+            (y_3class, 2, "entropy", None, None),
+            (y_1reg, None, "variance", None, None),
+            (y_2reg, 2, "variance", None, None),
+            (y_3reg, 2, "variance", None, None),
+            (y_1reg, None, "xgboost", g_1reg, h_1reg),
+            (y_2reg, 2, "xgboost", g_2reg, h_2reg),
+            (y_3reg, 2, "xgboost", g_3reg, h_3reg),
+            # (y_1class, None, "xgboost", g_1class, h_1class), # currently not handled
+            (y_2class, 2, "xgboost", g_2class, h_2class),
+            # (y_3class, 2, "xgboost", g_3class, h_3class), # currently not handled
         ],
     )
-    def test_2d(self, y: np.ndarray, ix: int, measure_name: str):
+    def test_2d(
+        self,
+        y: np.ndarray,
+        ix: int,
+        measure_name: str,
+        g: np.ndarray,
+        h: np.ndarray,
+    ):
         is_homogenous = len(np.unique(y)) == 1
+        growth_params = dtree.TreeGrowthParameters()
         try:
             # line to test
-            best = dtree.find_best_split(self.X_2D, y, measure_name)
+            best = dtree.find_best_split(
+                self.X_2D,
+                y,
+                measure_name,
+                g=g,
+                h=h,
+                growth_params=growth_params,
+            )
         except ValueError as ex:
             if is_homogenous:
                 pytest.xfail("Splitting a homogneous y failed as expected")

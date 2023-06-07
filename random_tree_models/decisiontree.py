@@ -194,10 +194,15 @@ def xgboost_split_score(
     g: np.ndarray, h: np.ndarray, growth_params: TreeGrowthParameters
 ) -> float:
     "Equation 7 in Chen et al 2016, XGBoost: A Scalable Tree Boosting System"
+    check_y_and_target_groups(g, target_groups=h)
+
     top = g.sum()
     top = top * top
 
     bottom = (h + growth_params.lam).sum()
+
+    if bottom == 0:
+        return 0.0
 
     score = top / bottom
     return -score
@@ -211,12 +216,13 @@ def calc_xgboost_split_score(
     growth_params: TreeGrowthParameters,
     **kwargs,
 ) -> float:
-    """Calculates the gini impurity of a split
+    """Calculates the xgboost general version score of a split with loss specifics in g and h.
 
     Based on: https://scikit-learn.org/stable/modules/tree.html#classification-criteria
     """
 
-    check_y_and_target_groups(y, target_groups=target_groups)
+    check_y_and_target_groups(g, target_groups=target_groups)
+    check_y_and_target_groups(h, target_groups=target_groups)
 
     n_left = target_groups.sum()
     n_right = len(target_groups) - n_left
@@ -301,6 +307,7 @@ def find_best_split(
                 h=h,
                 growth_params=growth_params,
             )
+
             if best_score is None or split_score > best_score:
                 best_score = split_score
                 best_column = array_column
@@ -388,7 +395,6 @@ def calc_leaf_weight(
     This computation assumes all y values are part of the same leaf.
     """
 
-    # TODO: enable choice of other aggregations / handling of multi class cases
     if len(y) == 0:
         return None
 
