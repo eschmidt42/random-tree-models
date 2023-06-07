@@ -1,6 +1,8 @@
 """XGBoost
 
 Reference: XGBoost: A Scalable Tree Boosting System, Chen et al. 2016
+https://dl.acm.org/doi/10.1145/2939672.2939785
+http://arxiv.org/abs/1603.02754 (only pre-print has the appendix)
 
 Key aspects to be implemented here:
 * regularization / their loss
@@ -19,10 +21,6 @@ from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 
 import random_tree_models.decisiontree as dtree
 import random_tree_models.gradientboostedtrees as gbt
-
-# TODO: implement histogramming
-
-# TODO: implement "default direction"
 
 
 class XGBoostTemplate(base.BaseEstimator):
