@@ -199,7 +199,7 @@ def xgboost_split_score(
     top = g.sum()
     top = top * top
 
-    bottom = (h + growth_params.lam).sum()
+    bottom = h.sum() + growth_params.lam
 
     if bottom == 0:
         return 0.0
