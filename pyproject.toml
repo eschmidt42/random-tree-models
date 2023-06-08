@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "random_tree_models"
-version = "0.2.0"
+version = "0.3.0"
 authors = [
     {name = "eschmidt42", email="11818904+eschmidt42@users.noreply.github.com"}
 ]
@@ -19,6 +19,7 @@ dependencies = [
     "isort",
     "pre-commit",
     "jupyter-contrib-nbextensions",
+    "ipywidgets",
     "pandas",
     "pydantic"
 ]
