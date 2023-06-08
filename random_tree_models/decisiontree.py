@@ -244,15 +244,30 @@ def grow_tree(
 ) -> Node:
     """Implementation of the Classification And Regression Tree (CART) algorithm
 
-    y - what the tree tries to estimate
-    yhat - previous best estimate
-    g - dloss/dyhat - first derivative of loss(y,yhat)
-    h - d^2loss/dyhat^2 - second derivative of loss(y,yhat)
+    Args:
+        X (np.ndarray): Input feature values to do thresholding on.
+        y (np.ndarray): Target values.
+        measure_name (str): Values indicating which functions in scoring.SplitScoreMetrics and leafweights.LeafWeightSchemes to call.
+        parent_node (Node, optional): Parent node in tree. Defaults to None.
+        depth (int, optional): Current tree depth. Defaults to 0.
+        growth_params (utils.TreeGrowthParameters, optional): Parameters controlling tree growth. Defaults to None.
+        g (np.ndarray, optional): Boosting and loss specific precomputed 1st order derivative dloss/dyhat. Defaults to None.
+        h (np.ndarray, optional): Boosting and loss specific precomputed 2nd order derivative d^2loss/dyhat^2. Defaults to None.
 
-    Some confusion that may arise: This function is used directly for decision trees
-    but also for boosting. In boosting what is to be predicted is actually g (dloss/dy_hat)
-    of loss(y,yhat). So the leaf weight to use for prediction may need additional transformation.
-    But this is handled on the level of the class that called this function, e.g. GradientBoostedTreesClassifier.
+    Raises:
+        ValueError: Fails if parent node passes an empty y array.
+
+    Returns:
+        Node: Tree node with leaf weight, node score and potential child nodes.
+
+    Note:
+    Currently measure_name controls how the split score and the leaf weights are computed.
+
+    But only the decision tree algorithm directly uses y for that and can predict y using the leaf weight values directly.
+
+    For the boosting algorithms g and h are used to compute split score and leaf weights. Their leaf weights
+    sometimes also need post-processing, e.g. for binary classification. Computation of g and h and post-processing is not
+    done here but in the respective class implementations of the algorithms.
     """
 
     n_obs = len(y)
