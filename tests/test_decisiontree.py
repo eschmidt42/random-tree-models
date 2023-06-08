@@ -319,7 +319,7 @@ class Test_find_best_split:
         h: np.ndarray,
     ):
         is_homogenous = len(np.unique(y)) == 1
-        grow_params = utils.TreeGrowthParameters()
+        grow_params = utils.TreeGrowthParameters(max_depth=2)
         try:
             # line to test
             best = dtree.find_best_split(
@@ -371,7 +371,7 @@ class Test_find_best_split:
         h: np.ndarray,
     ):
         is_homogenous = len(np.unique(y)) == 1
-        grow_params = utils.TreeGrowthParameters()
+        grow_params = utils.TreeGrowthParameters(max_depth=2)
         try:
             # line to test
             best = dtree.find_best_split(
@@ -423,7 +423,7 @@ class Test_find_best_split:
         h: np.ndarray,
     ):
         is_homogenous = len(np.unique(y)) == 1
-        growth_params = utils.TreeGrowthParameters()
+        growth_params = utils.TreeGrowthParameters(max_depth=2)
         try:
             # line to test
             best = dtree.find_best_split(
@@ -476,7 +476,7 @@ class Test_find_best_split:
         h: np.ndarray,
     ):
         is_homogenous = len(np.unique(y)) == 1
-        growth_params = utils.TreeGrowthParameters()
+        growth_params = utils.TreeGrowthParameters(max_depth=2)
         try:
             # line to test
             best = dtree.find_best_split(
@@ -510,7 +510,7 @@ class Test_find_best_split:
                 score=-1.0, column=0, threshold=0.0, target_groups=np.array([])
             ),
             None,
-            utils.TreeGrowthParameters(),
+            utils.TreeGrowthParameters(max_depth=2),
             False,
         ),
         # parent is None #2
@@ -519,25 +519,55 @@ class Test_find_best_split:
                 score=-1.0, column=0, threshold=0.0, target_groups=np.array([])
             ),
             dtree.Node(measure=dtree.SplitScore("bla")),
-            utils.TreeGrowthParameters(),
+            utils.TreeGrowthParameters(max_depth=2),
             False,
         ),
         # split is sufficient
         (
             dtree.BestSplit(
-                score=-1.0, column=0, threshold=0.0, target_groups=np.array([])
+                score=-1.0,
+                column=0,
+                threshold=0.0,
+                target_groups=np.array([False, True]),
             ),
             dtree.Node(measure=dtree.SplitScore("bla", value=-1.1)),
-            utils.TreeGrowthParameters(min_improvement=0.01),
+            utils.TreeGrowthParameters(max_depth=2, min_improvement=0.01),
             False,
         ),
-        # split is insufficient
+        # split is insufficient - because min gain not exceeded
         (
             dtree.BestSplit(
-                score=-1.0, column=0, threshold=0.0, target_groups=np.array([])
+                score=-1.0,
+                column=0,
+                threshold=0.0,
+                target_groups=np.array([False, True]),
             ),
             dtree.Node(measure=dtree.SplitScore("bla", value=-1.1)),
-            utils.TreeGrowthParameters(min_improvement=0.2),
+            utils.TreeGrowthParameters(max_depth=2, min_improvement=0.2),
+            True,
+        ),
+        # split is insufficient - because all items sorted left
+        (
+            dtree.BestSplit(
+                score=-1.0,
+                column=0,
+                threshold=0.0,
+                target_groups=np.array([True, True]),
+            ),
+            dtree.Node(measure=dtree.SplitScore("bla", value=-1.1)),
+            utils.TreeGrowthParameters(max_depth=2, min_improvement=0.0),
+            True,
+        ),
+        # split is insufficient - because all items sorted right
+        (
+            dtree.BestSplit(
+                score=-1.0,
+                column=0,
+                threshold=0.0,
+                target_groups=np.array([False, False]),
+            ),
+            dtree.Node(measure=dtree.SplitScore("bla", value=-1.1)),
+            utils.TreeGrowthParameters(max_depth=2, min_improvement=0.0),
             True,
         ),
     ],
@@ -567,7 +597,7 @@ class Test_grow_tree:
 
     def test_baselevel(self):
         # test returned leaf node
-        growth_params = utils.TreeGrowthParameters()
+        growth_params = utils.TreeGrowthParameters(max_depth=2)
         parent_node = None
         is_baselevel = True
         reason = "very custom leaf node comment"
@@ -591,7 +621,9 @@ class Test_grow_tree:
 
     def test_split_improvement_insufficient(self):
         # test split improvement below minimum
-        growth_params = utils.TreeGrowthParameters(min_improvement=0.2)
+        growth_params = utils.TreeGrowthParameters(
+            max_depth=2, min_improvement=0.2
+        )
         parent_score = -1.0
         new_score = -0.9
         best = dtree.BestSplit(
@@ -614,7 +646,7 @@ class Test_grow_tree:
         is_baselevel = False
         leaf_reason = "very custom leaf node comment"
         gain = new_score - parent_score
-        split_reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=}"
+        split_reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=} or all data points assigned to one side (is left {best.target_groups.mean()=:.2%})"
         with (
             patch(
                 "random_tree_models.decisiontree.check_is_baselevel",
@@ -643,7 +675,9 @@ class Test_grow_tree:
 
     def test_split_improvement_sufficient(self):
         # test split improvement above minumum, leading to two leaf nodes
-        growth_params = utils.TreeGrowthParameters(min_improvement=0.0)
+        growth_params = utils.TreeGrowthParameters(
+            max_depth=2, min_improvement=0.0
+        )
         parent_score = -1.0
         new_score = -0.9
         best = dtree.BestSplit(

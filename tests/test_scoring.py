@@ -178,7 +178,7 @@ def test_calc_gini_impurity(
     ],
 )
 def test_xgboost_split_score(g: np.ndarray, h: np.ndarray, is_bad: bool):
-    growth_params = utils.TreeGrowthParameters(lam=0.0)
+    growth_params = utils.TreeGrowthParameters(max_depth=2, lam=0.0)
     try:
         # line to test
         score = scoring.xgboost_split_score(g, h, growth_params)
@@ -235,7 +235,7 @@ def test_xgboost_split_score(g: np.ndarray, h: np.ndarray, is_bad: bool):
 def test_calc_xgboost_split_score(
     g: np.ndarray, h: np.ndarray, target_groups: np.ndarray, score_exp: float
 ):
-    growth_params = utils.TreeGrowthParameters(lam=0.0)
+    growth_params = utils.TreeGrowthParameters(max_depth=2, lam=0.0)
     y = None
     try:
         # line to test
@@ -320,7 +320,7 @@ class TestSplitScoreMetrics:
         target_groups: np.ndarray,
         score_exp: float,
     ):
-        growth_params = utils.TreeGrowthParameters(lam=0.0)
+        growth_params = utils.TreeGrowthParameters(max_depth=2, lam=0.0)
         y = None
 
         # line to test

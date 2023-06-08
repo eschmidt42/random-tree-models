@@ -62,19 +62,19 @@ class Node:
 
 
 def check_is_baselevel(
-    y: np.ndarray, node: Node, depth: int, max_depth: int = None
+    y: np.ndarray, node: Node, depth: int, max_depth: int
 ) -> T.Tuple[bool, str]:
     """Verifies if the tree traversal reached the baselevel / a leaf
     * group homogeneous / cannot sensibly be splitted further
     * no data in the group
     * max depth reached
     """
-    if depth >= max_depth:
+    if max_depth is not None and depth >= max_depth:
         return (True, "max depth reached")
     elif len(np.unique(y)) == 1:
         return (True, "homogenous group")
-    elif len(y) == 0:
-        return (True, "no data in group")
+    elif len(y) <= 1:
+        return (True, "<= 1 data point in group")
     else:
         return (False, "")
 
@@ -183,13 +183,20 @@ def check_if_gain_insufficient(
     parent_node: Node,
     growth_params: utils.TreeGrowthParameters,
 ) -> bool:
+    "Verifies if split is sensible"
     if parent_node is None or parent_node.measure.value is None:
         return False, None
 
     gain = best.score - parent_node.measure.value
     is_insufficient_gain = gain < growth_params.min_improvement
 
-    return is_insufficient_gain, gain
+    is_all_onesided = (
+        best.target_groups.all() or np.logical_not(best.target_groups).all()
+    )
+
+    is_insufficient = is_all_onesided or is_insufficient_gain
+
+    return is_insufficient, gain
 
 
 def grow_tree(
@@ -222,20 +229,24 @@ def grow_tree(
         y, parent_node, depth, max_depth=growth_params.max_depth
     )
 
-    leaf_weight, yhat, score = None, None, None
-    if len(y) > 0:
-        leaf_weight = leafweights.calc_leaf_weight(
-            y, measure_name, growth_params, g=g, h=h
+    # leaf_weight, yhat, score = None, None, None
+    if n_obs == 0:
+        raise ValueError(
+            f"Something went wrong. {parent_node=} handed down an empty set of data points."
         )
-        yhat = leaf_weight * np.ones_like(y)
-        score = scoring.SplitScoreMetrics[measure_name](
-            y,
-            np.ones_like(y, dtype=bool),
-            yhat=yhat,
-            g=g,
-            h=h,
-            growth_params=growth_params,
-        )
+
+    leaf_weight = leafweights.calc_leaf_weight(
+        y, measure_name, growth_params, g=g, h=h
+    )
+    yhat = leaf_weight * np.ones_like(y)
+    score = scoring.SplitScoreMetrics[measure_name](
+        y,
+        np.ones_like(y, dtype=bool),
+        yhat=yhat,
+        g=g,
+        h=h,
+        growth_params=growth_params,
+    )
 
     measure = SplitScore(measure_name, score=score)
 
@@ -264,7 +275,7 @@ def grow_tree(
     )
 
     if is_insufficient_gain:
-        reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=}"
+        reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=} or all data points assigned to one side (is left {best.target_groups.mean()=:.2%})"
         leaf_node = Node(
             array_column=None,
             threshold=None,
@@ -387,7 +398,11 @@ class DecisionTreeTemplate(base.BaseEstimator):
         self.lam = lam
 
     def _organize_growth_parameters(self):
-        self.growth_params_ = utils.TreeGrowthParameters(**self.get_params())
+        self.growth_params_ = utils.TreeGrowthParameters(
+            max_depth=self.max_depth,
+            min_improvement=self.min_improvement,
+            lam=self.lam,
+        )
 
     def fit(
         self,
