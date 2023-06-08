@@ -4,8 +4,8 @@ Reference: XGBoost: A Scalable Tree Boosting System, Chen et al. 2016
 https://dl.acm.org/doi/10.1145/2939672.2939785
 http://arxiv.org/abs/1603.02754 (only pre-print has the appendix)
 
-Key aspects to be implemented here:
-* regularization / their loss
+Key aspects:
+* regularization / Chen et al. loss
 * histogram / percentiles for splits
 * sparsity-aware split finding / "default direction" for missing values
 """
