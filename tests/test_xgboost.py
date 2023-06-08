@@ -88,6 +88,7 @@ class TestXGBoostClassifier:
         assert (predictions == self.y).all()
 
 
+@pytest.mark.slow
 @parametrize_with_checks(
     [xgboost.XGBoostRegressor(), xgboost.XGBoostClassifier()]
 )

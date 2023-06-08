@@ -21,6 +21,10 @@ from rich.tree import Tree
 from sklearn.utils.multiclass import check_classification_targets, unique_labels
 from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 
+import random_tree_models.leafweights as leafweights
+import random_tree_models.scoring as scoring
+import random_tree_models.utils as utils
+
 
 @dataclass(validate_on_init=True)
 class SplitScore:
@@ -57,214 +61,22 @@ class Node:
         return self.left is None and self.right is None
 
 
-@dataclass
-class TreeGrowthParameters:
-    max_depth: StrictInt = 42
-    min_improvement: StrictFloat = 0.0
-    lam: StrictFloat = 0.0
-
-
 def check_is_baselevel(
-    y: np.ndarray, node: Node, depth: int, max_depth: int = None
+    y: np.ndarray, node: Node, depth: int, max_depth: int
 ) -> T.Tuple[bool, str]:
     """Verifies if the tree traversal reached the baselevel / a leaf
     * group homogeneous / cannot sensibly be splitted further
     * no data in the group
     * max depth reached
     """
-    if depth >= max_depth:
+    if max_depth is not None and depth >= max_depth:
         return (True, "max depth reached")
     elif len(np.unique(y)) == 1:
         return (True, "homogenous group")
-    elif len(y) == 0:
-        return (True, "no data in group")
+    elif len(y) <= 1:
+        return (True, "<= 1 data point in group")
     else:
         return (False, "")
-
-
-def check_y_and_target_groups(y: np.ndarray, target_groups: np.ndarray = None):
-    n = len(y)
-    if n == 0:
-        raise ValueError(f"{n=}, expected at least one target value")
-
-    if target_groups is not None and len(target_groups) != n:
-        raise ValueError(f"{y.shape=} != {target_groups.shape=}")
-
-
-def calc_variance(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
-    """Calculates the variance of a split"""
-
-    check_y_and_target_groups(y, target_groups=target_groups)
-
-    n = len(y)
-
-    if len(np.unique(target_groups)) == 1:
-        return -np.var(y)
-
-    w_left = target_groups.sum() / n
-    w_right = 1.0 - w_left
-
-    var_left = np.var(y[target_groups])
-    var_right = np.var(y[~target_groups])
-
-    var = w_left * var_left + w_right * var_right
-    return -var
-
-
-def entropy(y: np.ndarray) -> float:
-    "Calculates the entropy across target values"
-
-    n = len(y)
-    check_y_and_target_groups(y)
-
-    unique_ys = np.unique(y)
-    ns = np.array([(y == y_val).sum() for y_val in unique_ys], dtype=int)
-
-    ps = ns / float(n)
-
-    if (ps == 1).any():
-        return 0
-
-    mask_ne0 = ~np.isclose(ps, 0)
-
-    h = ps[mask_ne0] * np.log2(ps[mask_ne0])
-    h = h.sum()
-
-    return h
-
-
-def calc_entropy(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
-    """Calculates the entropy of a split"""
-
-    check_y_and_target_groups(y, target_groups=target_groups)
-
-    w_left = target_groups.sum() / len(target_groups)
-    w_right = 1.0 - w_left
-
-    h_left = entropy(y[target_groups]) if w_left > 0 else 0
-    h_right = entropy(y[~target_groups]) if w_right > 0 else 0
-
-    h = w_left * h_left + w_right * h_right
-    return h
-
-
-def gini_impurity(y: np.ndarray) -> float:
-    "Calculates the gini impurity across target values"
-
-    check_y_and_target_groups(y)
-
-    n = len(y)
-
-    unique_ys = np.unique(y)
-    ns = np.array([(y == y_val).sum() for y_val in unique_ys], dtype=int)
-
-    ps = ns / float(n)
-
-    if (ps == 1).any():
-        return 0
-
-    mask_ne0 = ~np.isclose(ps, 0)
-
-    g = ps[mask_ne0] * (1 - ps[mask_ne0])
-    g = g.sum()
-
-    return -g
-
-
-def calc_gini_impurity(
-    y: np.ndarray, target_groups: np.ndarray, **kwargs
-) -> float:
-    """Calculates the gini impurity of a split
-
-    Based on: https://scikit-learn.org/stable/modules/tree.html#classification-criteria
-    """
-
-    check_y_and_target_groups(y, target_groups=target_groups)
-
-    w_left = target_groups.sum() / len(target_groups)
-    w_right = 1.0 - w_left
-
-    g_left = gini_impurity(y[target_groups]) if w_left > 0 else 0
-    g_right = gini_impurity(y[~target_groups]) if w_right > 0 else 0
-
-    g = w_left * g_left + w_right * g_right
-    return g
-
-
-def xgboost_split_score(
-    g: np.ndarray, h: np.ndarray, growth_params: TreeGrowthParameters
-) -> float:
-    "Equation 7 in Chen et al 2016, XGBoost: A Scalable Tree Boosting System"
-    check_y_and_target_groups(g, target_groups=h)
-
-    top = g.sum()
-    top = top * top
-
-    bottom = h.sum() + growth_params.lam
-
-    if bottom == 0:
-        return 0.0
-
-    score = top / bottom
-    return -score
-
-
-def calc_xgboost_split_score(
-    y: np.ndarray,
-    target_groups: np.ndarray,
-    g: np.ndarray,
-    h: np.ndarray,
-    growth_params: TreeGrowthParameters,
-    **kwargs,
-) -> float:
-    """Calculates the xgboost general version score of a split with loss specifics in g and h.
-
-    Based on: https://scikit-learn.org/stable/modules/tree.html#classification-criteria
-    """
-
-    check_y_and_target_groups(g, target_groups=target_groups)
-    check_y_and_target_groups(h, target_groups=target_groups)
-
-    n_left = target_groups.sum()
-    n_right = len(target_groups) - n_left
-
-    score_left = (
-        xgboost_split_score(g[target_groups], h[target_groups], growth_params)
-        if n_left > 0
-        else 0
-    )
-    score_right = (
-        xgboost_split_score(g[~target_groups], h[~target_groups], growth_params)
-        if n_right > 0
-        else 0
-    )
-
-    score = score_left + score_right
-    return score
-
-
-class SplitScoreMetrics(Enum):
-    # https://stackoverflow.com/questions/40338652/how-to-define-enum-values-that-are-functions
-    variance = partial(calc_variance)
-    entropy = partial(calc_entropy)
-    gini = partial(calc_gini_impurity)
-    # variance for split score because Friedman et al. 2001 in Algorithm 1
-    # step 4 minimize the squared error between actual and predicted dloss/dyhat
-    friedman_binary_classification = partial(calc_variance)
-    xgboost = partial(calc_xgboost_split_score)
-
-    def __call__(
-        self,
-        y: np.ndarray,
-        target_groups: np.ndarray,
-        yhat: np.ndarray = None,
-        g: np.ndarray = None,
-        h: np.ndarray = None,
-        growth_params: TreeGrowthParameters = None,
-    ) -> float:
-        return self.value(
-            y, target_groups, yhat=yhat, g=g, h=h, growth_params=growth_params
-        )
 
 
 @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
@@ -276,6 +88,37 @@ class BestSplit:
     default_is_left: StrictBool = None
 
 
+# TODO: add unit test
+def get_thresholds_and_target_groups(
+    feature_values: np.ndarray,
+) -> T.Generator[T.Tuple[np.ndarray, np.ndarray, bool], None, None]:
+    "Creates a generator for split finding, returning the used threshold, the target groups and a bool indicating if the default direction is left"
+    is_missing = np.isnan(feature_values)
+    is_finite = np.logical_not(is_missing)
+    all_finite = is_finite.all()
+
+    if all_finite:
+        default_direction_is_left = None
+        for threshold in feature_values[1:]:
+            target_groups = feature_values < threshold
+            yield (threshold, target_groups, default_direction_is_left)
+    else:
+        finite_feature_values = feature_values[is_finite]
+
+        for threshold in finite_feature_values[1:]:
+            # default direction left - feature value <= threshold or missing  (i.e. missing are included left of the threshold)
+            target_groups = np.logical_or(
+                feature_values < threshold, is_missing
+            )
+            yield (threshold, target_groups, True)
+
+            # default direction right - feature value <= threshold and finite (i.e. missing are included right of the threshold)
+            target_groups = np.logical_and(
+                feature_values < threshold, is_finite
+            )
+            yield (threshold, target_groups, False)
+
+
 def find_best_split(
     X: np.ndarray,
     y: np.ndarray,
@@ -283,229 +126,172 @@ def find_best_split(
     yhat: np.ndarray = None,
     g: np.ndarray = None,
     h: np.ndarray = None,
-    growth_params: TreeGrowthParameters = None,
+    growth_params: utils.TreeGrowthParameters = None,
 ) -> BestSplit:
-    """ """
+    """Find the best split, detecting the "default direction" with missing data."""
+
     if len(np.unique(y)) == 1:
         raise ValueError(
             f"Tried to find a split for homogenous y: {y[:3]} ... {y[-3:]}"
         )
 
-    best_score = None
-    best_column = None
-    best_threshold = None
-    best_target_groups = None
-    best_default_direction_is_left = None
+    best = None  # this will be an BestSplit instance
 
     for array_column in range(X.shape[1]):
         feature_values = X[:, array_column]
-        is_missing = np.isnan(feature_values)
-        is_finite = np.logical_not(is_missing)
 
-        # if there are no nans
-        if is_finite.all():
-            for threshold in feature_values[1:]:
-                target_groups = feature_values < threshold
-                split_score = SplitScoreMetrics[measure_name](
-                    y,
-                    target_groups,
-                    yhat=yhat,
-                    g=g,
-                    h=h,
-                    growth_params=growth_params,
+        for (
+            threshold,
+            target_groups,
+            default_is_left,
+        ) in get_thresholds_and_target_groups(feature_values):
+            split_score = scoring.SplitScoreMetrics[measure_name](
+                y,
+                target_groups,
+                yhat=yhat,
+                g=g,
+                h=h,
+                growth_params=growth_params,
+            )
+
+            if best is None or split_score > best.score:
+                best = BestSplit(
+                    score=float(split_score),
+                    column=int(array_column),
+                    threshold=float(threshold),
+                    target_groups=target_groups,
+                    default_is_left=default_is_left,
                 )
 
-                if best_score is None or split_score > best_score:
-                    best_score = split_score
-                    best_column = array_column
-                    best_threshold = threshold
-                    best_target_groups = target_groups
-
-        else:  # there are nans
-            finite_feature_values = feature_values[is_finite]
-
-            for threshold in finite_feature_values[1:]:
-                # shuffling all missing left and right and comparing what "default direction" optimizes the loss.
-                # so either left of the threshold includes or excludes missing values.
-                # based on Chen et al. 2016, XGBoost: A Scalable Tree Boosting System
-                # algorithm 3, sparsity-aware split finding
-                for default_direction_left in [True, False]:
-                    if (
-                        default_direction_left
-                    ):  # feature value <= threshold or missing
-                        target_groups = np.logical_or(
-                            feature_values < threshold, is_missing
-                        )
-                    else:  # feature value <= threshold and finite
-                        target_groups = np.logical_and(
-                            feature_values < threshold, is_finite
-                        )
-
-                    split_score = SplitScoreMetrics[measure_name](
-                        y,
-                        target_groups,
-                        yhat=yhat,
-                        g=g,
-                        h=h,
-                        growth_params=growth_params,
-                    )
-
-                    if best_score is None or split_score > best_score:
-                        best_score = split_score
-                        best_column = array_column
-                        best_threshold = threshold
-                        best_target_groups = target_groups
-                        best_default_direction_is_left = default_direction_left
-
-    return BestSplit(
-        float(best_score),
-        int(best_column),
-        float(best_threshold),
-        best_target_groups,
-        best_default_direction_is_left,
-    )
+    return best
 
 
-def check_if_gain_insufficient(
-    best: BestSplit, parent_node: Node, growth_params: TreeGrowthParameters
+def check_if_split_sensible(
+    best: BestSplit,
+    parent_node: Node,
+    growth_params: utils.TreeGrowthParameters,
 ) -> bool:
+    "Verifies if split is sensible, considering score gain and left/right group sizes"
     if parent_node is None or parent_node.measure.value is None:
         return False, None
 
+    # score gain
     gain = best.score - parent_node.measure.value
     is_insufficient_gain = gain < growth_params.min_improvement
 
-    return is_insufficient_gain, gain
-
-
-def leaf_weight_mean(
-    y: np.ndarray, growth_params: TreeGrowthParameters, **kwargs
-) -> float:
-    return np.mean(y)
-
-
-def leaf_weight_binary_classification_friedman2001(
-    y: np.ndarray, growth_params: TreeGrowthParameters, g: np.ndarray, **kwargs
-) -> float:
-    "Computes optimal leaf weight as in Friedman et al. 2001 Algorithm 5"
-
-    g_abs = np.abs(g)
-    gamma_jm = g.sum() / (g_abs * (2 - g_abs)).sum()
-    return gamma_jm
-
-
-def leaf_weight_xgboost(
-    y: np.ndarray,
-    growth_params: TreeGrowthParameters,
-    g: np.ndarray,
-    h: np.ndarray,
-    **kwargs,
-) -> float:
-    "Computes optimal leaf weight as in Chen et al. 2016 equation 5"
-
-    w = -g.sum() / (h + growth_params.lam).sum()
-    return w
-
-
-class LeafWeightSchemes(Enum):
-    # https://stackoverflow.com/questions/40338652/how-to-define-enum-values-that-are-functions
-    friedman_binary_classification = partial(
-        leaf_weight_binary_classification_friedman2001
+    # left/right group assignment
+    is_all_onesided = (
+        best.target_groups.all() or np.logical_not(best.target_groups).all()
     )
-    variance = partial(leaf_weight_mean)
-    entropy = partial(leaf_weight_mean)
-    gini = partial(leaf_weight_mean)
-    xgboost = partial(leaf_weight_xgboost)
 
-    def __call__(
-        self,
-        y: np.ndarray,
-        growth_params: TreeGrowthParameters,
-        g: np.ndarray = None,
-        h: np.ndarray = None,
-    ) -> float:
-        return self.value(y, growth_params, g=g, h=h)
+    is_not_sensible = is_all_onesided or is_insufficient_gain
+
+    return is_not_sensible, gain
 
 
-def calc_leaf_weight(
+# TODO: add unit test
+def calc_leaf_weight_and_split_score(
     y: np.ndarray,
     measure_name: str,
-    growth_params: TreeGrowthParameters,
-    g: np.ndarray = None,
-    h: np.ndarray = None,
-) -> np.ndarray:
-    """Calculates the leaf weight, depending on the choice of measure_name.
+    growth_params: utils.TreeGrowthParameters,
+    g: np.ndarray,
+    h: np.ndarray,
+) -> T.Tuple[float]:
+    leaf_weight = leafweights.calc_leaf_weight(
+        y, measure_name, growth_params, g=g, h=h
+    )
 
-    This computation assumes all y values are part of the same leaf.
-    """
+    yhat = leaf_weight * np.ones_like(y)
+    score = scoring.SplitScoreMetrics[measure_name](
+        y,
+        np.ones_like(y, dtype=bool),
+        yhat=yhat,
+        g=g,
+        h=h,
+        growth_params=growth_params,
+    )
 
-    if len(y) == 0:
-        return None
+    return leaf_weight, score
 
-    weight_func = LeafWeightSchemes[measure_name]
-    leaf_weights = weight_func(y, growth_params, g=g, h=h)
 
-    return leaf_weights
+# TODO: add unit test
+def select_arrays_for_child_node(
+    go_left: bool,
+    best: BestSplit,
+    X: np.ndarray,
+    y: np.ndarray,
+    g: np.ndarray,
+    h: np.ndarray,
+) -> T.Tuple[np.ndarray]:
+    mask = best.target_groups == go_left
+    _X = X[mask, :]
+    _y = y[mask]
+    _g = g[mask] if g is not None else None
+    _h = h[mask] if h is not None else None
+    return _X, _y, _g, _h
 
 
 def grow_tree(
     X: np.ndarray,
     y: np.ndarray,
     measure_name: str,
-    yhat: np.ndarray = None,
     parent_node: Node = None,
     depth: int = 0,
-    growth_params: TreeGrowthParameters = None,
+    growth_params: utils.TreeGrowthParameters = None,
     g: np.ndarray = None,
     h: np.ndarray = None,
     **kwargs,
 ) -> Node:
     """Implementation of the Classification And Regression Tree (CART) algorithm
 
-    y - what the tree tries to estimate
-    yhat - previous best estimate
-    g - dloss/dyhat - first derivative of loss(y,yhat)
-    h - d^2loss/dyhat^2 - second derivative of loss(y,yhat)
+    Args:
+        X (np.ndarray): Input feature values to do thresholding on.
+        y (np.ndarray): Target values.
+        measure_name (str): Values indicating which functions in scoring.SplitScoreMetrics and leafweights.LeafWeightSchemes to call.
+        parent_node (Node, optional): Parent node in tree. Defaults to None.
+        depth (int, optional): Current tree depth. Defaults to 0.
+        growth_params (utils.TreeGrowthParameters, optional): Parameters controlling tree growth. Defaults to None.
+        g (np.ndarray, optional): Boosting and loss specific precomputed 1st order derivative dloss/dyhat. Defaults to None.
+        h (np.ndarray, optional): Boosting and loss specific precomputed 2nd order derivative d^2loss/dyhat^2. Defaults to None.
 
-    Some confusion that may arise: This function is used directly for decision trees
-    but also for boosting. In boosting what is to be predicted is actually g (dloss/dy_hat)
-    of loss(y,yhat). So the leaf weight to use for prediction may need additional transformation.
-    But this is handled on the level of the class that called this function, e.g. GradientBoostedTreesClassifier.
+    Raises:
+        ValueError: Fails if parent node passes an empty y array.
+
+    Returns:
+        Node: Tree node with leaf weight, node score and potential child nodes.
+
+    Note:
+    Currently measure_name controls how the split score and the leaf weights are computed.
+
+    But only the decision tree algorithm directly uses y for that and can predict y using the leaf weight values directly.
+
+    For the boosting algorithms g and h are used to compute split score and leaf weights. Their leaf weights
+    sometimes also need post-processing, e.g. for binary classification. Computation of g and h and post-processing is not
+    done here but in the respective class implementations of the algorithms.
     """
 
     n_obs = len(y)
+    if n_obs == 0:
+        raise ValueError(
+            f"Something went wrong. {parent_node=} handed down an empty set of data points."
+        )
+
     is_baselevel, reason = check_is_baselevel(
         y, parent_node, depth, max_depth=growth_params.max_depth
     )
 
-    leaf_weight, yhat, score = None, None, None
-    if len(y) > 0:
-        leaf_weight = calc_leaf_weight(y, measure_name, growth_params, g=g, h=h)
-        yhat = leaf_weight * np.ones_like(y)
-        score = SplitScoreMetrics[measure_name](
-            y,
-            np.ones_like(y, dtype=bool),
-            yhat=yhat,
-            g=g,
-            h=h,
-            growth_params=growth_params,
-        )
+    # compute leaf weight (for prediction) and node score (for split gain check)
+    leaf_weight, score = calc_leaf_weight_and_split_score(
+        y, measure_name, growth_params, g, h
+    )
 
-    measure = SplitScore(measure_name, score=score)
-
-    if is_baselevel:
-        leaf_node = Node(
-            array_column=None,
-            threshold=None,
+    if is_baselevel:  # end of the line buddy
+        return Node(
             prediction=leaf_weight,
-            default_is_left=None,
-            left=None,
-            right=None,
-            measure=measure,
+            measure=SplitScore(measure_name, score=score),
             n_obs=n_obs,
             reason=reason,
         )
-        return leaf_node
 
     # find best split
     best = find_best_split(
@@ -513,70 +299,55 @@ def grow_tree(
     )
 
     # check if improvement due to split is below minimum requirement
-    is_insufficient_gain, gain = check_if_gain_insufficient(
+    is_not_sensible_split, gain = check_if_split_sensible(
         best, parent_node, growth_params
     )
 
-    if is_insufficient_gain:
-        reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=}"
+    if is_not_sensible_split:
+        reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=} or all data points assigned to one side (is left {best.target_groups.mean()=:.2%})"
         leaf_node = Node(
-            array_column=None,
-            threshold=None,
             prediction=leaf_weight,
-            default_is_left=None,
-            left=None,
-            right=None,
-            measure=measure,
+            measure=SplitScore(measure_name, score=score),
             n_obs=n_obs,
             reason=reason,
         )
         return leaf_node
 
-    measure = SplitScore(measure_name, best.score)
+    # create new parent node for subsequent child nodes
     new_node = Node(
         array_column=best.column,
         threshold=best.threshold,
         prediction=leaf_weight,
         default_is_left=best.default_is_left,
-        left=None,
-        right=None,
-        measure=measure,
+        measure=SplitScore(measure_name, best.score),
         n_obs=n_obs,
         reason="",
     )
 
     # descend left
-    mask_left = best.target_groups == True
-    X_left = X[mask_left, :]
-    y_left = y[mask_left]
-    g_left = g[mask_left] if g is not None else None
-    h_left = h[mask_left] if h is not None else None
+    _X, _y, _g, _h = select_arrays_for_child_node(True, best, X, y, g, h)
     new_node.left = grow_tree(
-        X_left,
-        y_left,
+        _X,
+        _y,
         measure_name=measure_name,
         parent_node=new_node,
         depth=depth + 1,
         growth_params=growth_params,
-        g=g_left,
-        h=h_left,
+        g=_g,
+        h=_h,
     )
 
     # descend right
-    mask_right = best.target_groups == False
-    X_right = X[mask_right, :]
-    y_right = y[mask_right]
-    g_right = g[mask_right] if g is not None else None
-    h_right = h[mask_right] if h is not None else None
+    _X, _y, _g, _h = select_arrays_for_child_node(False, best, X, y, g, h)
     new_node.right = grow_tree(
-        X_right,
-        y_right,
+        _X,
+        _y,
         measure_name=measure_name,
         parent_node=new_node,
         depth=depth + 1,
         growth_params=growth_params,
-        g=g_right,
-        h=h_right,
+        g=_g,
+        h=_h,
     )
 
     return new_node
@@ -641,7 +412,11 @@ class DecisionTreeTemplate(base.BaseEstimator):
         self.lam = lam
 
     def _organize_growth_parameters(self):
-        self.growth_params_ = TreeGrowthParameters(**self.get_params())
+        self.growth_params_ = utils.TreeGrowthParameters(
+            max_depth=self.max_depth,
+            min_improvement=self.min_improvement,
+            lam=self.lam,
+        )
 
     def fit(
         self,
