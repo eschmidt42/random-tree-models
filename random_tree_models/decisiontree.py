@@ -201,11 +201,52 @@ def check_if_split_sensible(
     return is_not_sensible, gain
 
 
+# TODO: add unit test
+def calc_leaf_weight_and_split_score(
+    y: np.ndarray,
+    measure_name: str,
+    growth_params: utils.TreeGrowthParameters,
+    g: np.ndarray,
+    h: np.ndarray,
+) -> T.Tuple[float]:
+    leaf_weight = leafweights.calc_leaf_weight(
+        y, measure_name, growth_params, g=g, h=h
+    )
+
+    yhat = leaf_weight * np.ones_like(y)
+    score = scoring.SplitScoreMetrics[measure_name](
+        y,
+        np.ones_like(y, dtype=bool),
+        yhat=yhat,
+        g=g,
+        h=h,
+        growth_params=growth_params,
+    )
+
+    return leaf_weight, score
+
+
+# TODO: add unit test
+def select_arrays_for_child_node(
+    go_left: bool,
+    best: BestSplit,
+    X: np.ndarray,
+    y: np.ndarray,
+    g: np.ndarray,
+    h: np.ndarray,
+) -> T.Tuple[np.ndarray]:
+    mask = best.target_groups == go_left
+    _X = X[mask, :]
+    _y = y[mask]
+    _g = g[mask] if g is not None else None
+    _h = h[mask] if h is not None else None
+    return _X, _y, _g, _h
+
+
 def grow_tree(
     X: np.ndarray,
     y: np.ndarray,
     measure_name: str,
-    yhat: np.ndarray = None,
     parent_node: Node = None,
     depth: int = 0,
     growth_params: utils.TreeGrowthParameters = None,
@@ -227,44 +268,27 @@ def grow_tree(
     """
 
     n_obs = len(y)
-    is_baselevel, reason = check_is_baselevel(
-        y, parent_node, depth, max_depth=growth_params.max_depth
-    )
-
-    # leaf_weight, yhat, score = None, None, None
     if n_obs == 0:
         raise ValueError(
             f"Something went wrong. {parent_node=} handed down an empty set of data points."
         )
 
-    leaf_weight = leafweights.calc_leaf_weight(
-        y, measure_name, growth_params, g=g, h=h
-    )
-    yhat = leaf_weight * np.ones_like(y)
-    score = scoring.SplitScoreMetrics[measure_name](
-        y,
-        np.ones_like(y, dtype=bool),
-        yhat=yhat,
-        g=g,
-        h=h,
-        growth_params=growth_params,
+    is_baselevel, reason = check_is_baselevel(
+        y, parent_node, depth, max_depth=growth_params.max_depth
     )
 
-    measure = SplitScore(measure_name, score=score)
+    # compute leaf weight (for prediction) and node score (for split gain check)
+    leaf_weight, score = calc_leaf_weight_and_split_score(
+        y, measure_name, growth_params, g, h
+    )
 
-    if is_baselevel:
-        leaf_node = Node(
-            array_column=None,
-            threshold=None,
+    if is_baselevel:  # end of the line buddy
+        return Node(
             prediction=leaf_weight,
-            default_is_left=None,
-            left=None,
-            right=None,
-            measure=measure,
+            measure=SplitScore(measure_name, score=score),
             n_obs=n_obs,
             reason=reason,
         )
-        return leaf_node
 
     # find best split
     best = find_best_split(
@@ -279,63 +303,48 @@ def grow_tree(
     if is_not_sensible_split:
         reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=} or all data points assigned to one side (is left {best.target_groups.mean()=:.2%})"
         leaf_node = Node(
-            array_column=None,
-            threshold=None,
             prediction=leaf_weight,
-            default_is_left=None,
-            left=None,
-            right=None,
-            measure=measure,
+            measure=SplitScore(measure_name, score=score),
             n_obs=n_obs,
             reason=reason,
         )
         return leaf_node
 
-    measure = SplitScore(measure_name, best.score)
+    # create new parent node for subsequent child nodes
     new_node = Node(
         array_column=best.column,
         threshold=best.threshold,
         prediction=leaf_weight,
         default_is_left=best.default_is_left,
-        left=None,
-        right=None,
-        measure=measure,
+        measure=SplitScore(measure_name, best.score),
         n_obs=n_obs,
         reason="",
     )
 
     # descend left
-    mask_left = best.target_groups == True
-    X_left = X[mask_left, :]
-    y_left = y[mask_left]
-    g_left = g[mask_left] if g is not None else None
-    h_left = h[mask_left] if h is not None else None
+    _X, _y, _g, _h = select_arrays_for_child_node(True, best, X, y, g, h)
     new_node.left = grow_tree(
-        X_left,
-        y_left,
+        _X,
+        _y,
         measure_name=measure_name,
         parent_node=new_node,
         depth=depth + 1,
         growth_params=growth_params,
-        g=g_left,
-        h=h_left,
+        g=_g,
+        h=_h,
     )
 
     # descend right
-    mask_right = best.target_groups == False
-    X_right = X[mask_right, :]
-    y_right = y[mask_right]
-    g_right = g[mask_right] if g is not None else None
-    h_right = h[mask_right] if h is not None else None
+    _X, _y, _g, _h = select_arrays_for_child_node(False, best, X, y, g, h)
     new_node.right = grow_tree(
-        X_right,
-        y_right,
+        _X,
+        _y,
         measure_name=measure_name,
         parent_node=new_node,
         depth=depth + 1,
         growth_params=growth_params,
-        g=g_right,
-        h=h_right,
+        g=_g,
+        h=_h,
     )
 
     return new_node
