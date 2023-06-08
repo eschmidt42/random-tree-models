@@ -178,25 +178,27 @@ def find_best_split(
     )
 
 
-def check_if_gain_insufficient(
+def check_if_split_sensible(
     best: BestSplit,
     parent_node: Node,
     growth_params: utils.TreeGrowthParameters,
 ) -> bool:
-    "Verifies if split is sensible"
+    "Verifies if split is sensible, considering score gain and left/right group sizes"
     if parent_node is None or parent_node.measure.value is None:
         return False, None
 
+    # score gain
     gain = best.score - parent_node.measure.value
     is_insufficient_gain = gain < growth_params.min_improvement
 
+    # left/right group assignment
     is_all_onesided = (
         best.target_groups.all() or np.logical_not(best.target_groups).all()
     )
 
-    is_insufficient = is_all_onesided or is_insufficient_gain
+    is_not_sensible = is_all_onesided or is_insufficient_gain
 
-    return is_insufficient, gain
+    return is_not_sensible, gain
 
 
 def grow_tree(
@@ -270,11 +272,11 @@ def grow_tree(
     )
 
     # check if improvement due to split is below minimum requirement
-    is_insufficient_gain, gain = check_if_gain_insufficient(
+    is_not_sensible_split, gain = check_if_split_sensible(
         best, parent_node, growth_params
     )
 
-    if is_insufficient_gain:
+    if is_not_sensible_split:
         reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=} or all data points assigned to one side (is left {best.target_groups.mean()=:.2%})"
         leaf_node = Node(
             array_column=None,

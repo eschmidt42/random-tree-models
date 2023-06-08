@@ -502,7 +502,7 @@ class Test_find_best_split:
 
 
 @pytest.mark.parametrize(
-    "best,parent_node,growth_params,is_insufficient_exp",
+    "best,parent_node,growth_params,is_no_sensible_split_exp",
     [
         # parent is None #1
         (
@@ -576,14 +576,14 @@ def test_check_if_gain_insufficient(
     best: dtree.BestSplit,
     parent_node: dtree.Node,
     growth_params: utils.TreeGrowthParameters,
-    is_insufficient_exp: bool,
+    is_no_sensible_split_exp: bool,
 ):
     # line to test
-    is_insufficient_gain, gain = dtree.check_if_gain_insufficient(
+    is_not_sensible_split, gain = dtree.check_if_split_sensible(
         best, parent_node, growth_params
     )
 
-    assert is_insufficient_gain == is_insufficient_exp
+    assert is_not_sensible_split == is_no_sensible_split_exp
     if parent_node is None or parent_node.measure.value is None:
         assert gain is None
 
