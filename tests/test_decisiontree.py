@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.decisiontree as dtree
+import random_tree_models.utils as utils
 
 # first value in each tuple is the value to test and the second is the flag indicating if this should work
 BOOL_OPTIONS_NONE_OKAY = [(False, True), (True, True), ("blub", False)]
@@ -159,332 +160,6 @@ def test_check_is_baselevel(y, depths):
 
     assert is_baselevel == is_baselevel_exp
     assert isinstance(msg, str)
-
-
-@pytest.mark.parametrize(
-    "y, target_groups, is_bad",
-    [
-        (np.array([]), np.array([False, True]), True),
-        (np.array([]), np.array([False]), True),
-        (np.array([]), np.array([]), True),
-        (np.array([]), None, True),
-        (np.array([1]), np.array([False, True]), True),
-        (np.array([1, 0]), np.array([False, True]), False),
-        (np.array([1, 1]), np.array([True]), True),
-    ],
-)
-def test_check_y_and_target_groups(y, target_groups, is_bad):
-    try:
-        # line to test
-        dtree.check_y_and_target_groups(y, target_groups=target_groups)
-    except ValueError as ex:
-        if is_bad:
-            pytest.xfail("y and target_groups properly failed")
-        else:
-            raise ex
-    else:
-        if is_bad:
-            pytest.fail(f"{y=} {target_groups=} should have failed but didn't")
-
-
-@pytest.mark.parametrize(
-    "y, target_groups, variance_exp",
-    [
-        (np.array([]), None, None),
-        (np.array([1]), np.array([False, True]), None),
-        (np.array([1]), np.array([True]), 0),
-        (np.array([1, 1]), np.array([True, True]), 0),
-        (np.array([1]), np.array([False]), 0),
-        (np.array([1, 1]), np.array([False, False]), 0),
-        (np.array([1, 1, 2, 2]), np.array([False, False, True, True]), 0),
-        (np.array([1, 1, 2, 2]), np.array([False, True, False, True]), -0.25),
-    ],
-)
-def test_calc_variance(
-    y: np.ndarray, target_groups: np.ndarray, variance_exp: float
-):
-    try:
-        # line to test
-        variance = dtree.calc_variance(y, target_groups)
-    except ValueError as ex:
-        if variance_exp is None:
-            pytest.xfail("Properly raised error calculating the variance")
-        else:
-            raise ex
-    else:
-        if variance_exp is None:
-            pytest.fail("calc_variance should have failed but didn't")
-        assert variance == variance_exp
-
-
-@pytest.mark.parametrize(
-    "y",
-    [
-        np.array([]),
-        np.array([1]),
-        np.array([1, 2]),
-    ],
-)
-def test_entropy(y: np.ndarray):
-    try:
-        # line to test
-        h = dtree.entropy(y)
-    except ValueError as ex:
-        if len(y) == 0:
-            pytest.xfail("entropy properly failed because of empty y")
-        else:
-            raise ex
-    else:
-        if len(y) == 0:
-            pytest.fail("entropy should have failed but didn't")
-
-        assert np.less_equal(h, 0)
-
-
-@pytest.mark.parametrize(
-    "y, target_groups, h_exp",
-    [
-        (np.array([]), None, None),
-        (np.array([1]), np.array([False, True]), None),
-        (np.array([1]), np.array([True]), 0),
-        (np.array([1, 1]), np.array([True, True]), 0),
-        (np.array([1]), np.array([False]), 0),
-        (np.array([1, 1]), np.array([False, False]), 0),
-        (np.array([1, 1, 2, 2]), np.array([False, False, True, True]), 0),
-        (np.array([1, 1, 2, 2]), np.array([False, True, False, True]), -1.0),
-    ],
-)
-def test_calc_entropy(y: np.ndarray, target_groups: np.ndarray, h_exp: float):
-    try:
-        # line to test
-        h = dtree.calc_entropy(y, target_groups)
-    except ValueError as ex:
-        if h_exp is None:
-            pytest.xfail("Properly raised error calculating the entropy")
-        else:
-            raise ex
-    else:
-        if h_exp is None:
-            pytest.fail("calc_entropy should have failed but didn't")
-        assert h == h_exp
-
-
-@pytest.mark.parametrize(
-    "y",
-    [
-        np.array([]),
-        np.array([1]),
-        np.array([1, 2]),
-    ],
-)
-def test_gini_impurity(y: np.ndarray):
-    try:
-        # line to test
-        g = dtree.gini_impurity(y)
-    except ValueError as ex:
-        if len(y) == 0:
-            pytest.xfail("gini_impurity properly failed because of empty y")
-        else:
-            raise ex
-    else:
-        if len(y) == 0:
-            pytest.fail("gini_impurity should have failed but didn't")
-
-        assert np.less_equal(g, 0)
-
-
-@pytest.mark.parametrize(
-    "y, target_groups, g_exp",
-    [
-        (np.array([]), None, None),
-        (np.array([1]), np.array([False, True]), None),
-        (np.array([1]), np.array([True]), 0),
-        (np.array([1, 1]), np.array([True, True]), 0),
-        (np.array([1]), np.array([False]), 0),
-        (np.array([1, 1]), np.array([False, False]), 0),
-        (np.array([1, 1, 2, 2]), np.array([False, False, True, True]), 0),
-        (np.array([1, 1, 2, 2]), np.array([False, True, False, True]), -0.5),
-    ],
-)
-def test_calc_gini_impurity(
-    y: np.ndarray, target_groups: np.ndarray, g_exp: float
-):
-    try:
-        # line to test
-        g = dtree.calc_gini_impurity(y, target_groups)
-    except ValueError as ex:
-        if g_exp is None:
-            pytest.xfail("Properly raised error calculating the gini impurity")
-        else:
-            raise ex
-    else:
-        if g_exp is None:
-            pytest.fail("calc_gini_impurity should have failed but didn't")
-        assert g == g_exp
-
-
-@pytest.mark.parametrize(
-    "g,h,is_bad",
-    [
-        (np.array([]), np.array([]), True),
-        (np.array([1]), np.array([1]), False),
-        (np.array([1]), np.array([1, 2]), True),
-        (np.array([1, 2]), np.array([1]), True),
-        (np.array([1, 2]), np.array([1, 2]), False),
-    ],
-)
-def test_xgboost_split_score(g: np.ndarray, h: np.ndarray, is_bad: bool):
-    growth_params = dtree.TreeGrowthParameters(lam=0.0)
-    try:
-        # line to test
-        score = dtree.xgboost_split_score(g, h, growth_params)
-    except ValueError as ex:
-        if is_bad:
-            pytest.xfail(
-                "xgboost_split_score properly failed because of empty g or h"
-            )
-        else:
-            raise ex
-    else:
-        if is_bad:
-            pytest.fail(
-                "xgboost_split_score should have failed due to empty g or h but didn't"
-            )
-
-        assert np.less_equal(score, 0)
-
-
-@pytest.mark.parametrize(
-    "g, h, target_groups, score_exp",
-    [
-        # failure cases
-        (np.array([]), np.array([]), np.array([]), None),
-        (np.array([1]), np.array([-1.0]), np.array([False, True]), None),
-        # regression cases - least squares - no split worse than with split
-        (
-            np.array([-0.5, 0.5]),
-            np.array([-1.0, -1.0]),
-            np.array([True, False]),
-            0.5,
-        ),  # with split
-        (
-            np.array([-1.0, 1.0]),
-            np.array([-1.0, -1.0]),
-            np.array([False, False]),
-            0.0,
-        ),  # without split
-        # classification cases - binomial log-likelihood
-        (
-            np.array([-1.0, 1.0]),
-            np.array([-1.0, -1.0]),
-            np.array([True, False]),
-            2.0,
-        ),  # with split
-        (
-            np.array([-1.0, 1.0]),
-            np.array([-1.0, -1.0]),
-            np.array([False, False]),
-            0.0,
-        ),  # without split
-    ],
-)
-def test_calc_xgboost_split_score(
-    g: np.ndarray, h: np.ndarray, target_groups: np.ndarray, score_exp: float
-):
-    growth_params = dtree.TreeGrowthParameters(lam=0.0)
-    y = None
-    try:
-        # line to test
-        score = dtree.calc_xgboost_split_score(
-            y, target_groups, g, h, growth_params
-        )
-    except ValueError as ex:
-        if score_exp is None:
-            pytest.xfail("Properly raised error calculating the xgboost score")
-        else:
-            raise ex
-    else:
-        if score_exp is None:
-            pytest.fail(
-                "calc_xgboost_split_score should have failed but didn't"
-            )
-        assert score == score_exp
-
-
-class TestSplitScoreMetrics:
-    "Redudancy test - calling calc_xgboost_split_score etc via SplitScoreMetrics needs to yield the same values as in the test above."
-    y = np.array([1, 1, 2, 2])
-    target_groups = np.array([False, True, False, True])
-
-    g_exp = -0.5
-    h_exp = -1.0
-    var_exp = -0.25
-
-    def test_gini(self):
-        g = dtree.SplitScoreMetrics["gini"](self.y, self.target_groups)
-        assert g == self.g_exp
-
-    def test_entropy(self):
-        h = dtree.SplitScoreMetrics["entropy"](self.y, self.target_groups)
-        assert h == self.h_exp
-
-    def test_variance(self):
-        var = dtree.SplitScoreMetrics["variance"](self.y, self.target_groups)
-        assert var == self.var_exp
-
-    def test_friedman_binary_classification(self):
-        var = dtree.SplitScoreMetrics["friedman_binary_classification"](
-            self.y, self.target_groups
-        )
-        assert var == self.var_exp
-
-    @pytest.mark.parametrize(
-        "g, h, target_groups, score_exp",
-        [
-            # regression cases - least squares - no split worse than with split
-            (
-                np.array([-0.5, 0.5]),
-                np.array([-1.0, -1.0]),
-                np.array([True, False]),
-                0.5,
-            ),  # with split
-            (
-                np.array([-1.0, 1.0]),
-                np.array([-1.0, -1.0]),
-                np.array([False, False]),
-                0.0,
-            ),  # without split
-            # classification cases - binomial log-likelihood
-            (
-                np.array([-1.0, 1.0]),
-                np.array([-1.0, -1.0]),
-                np.array([True, False]),
-                2.0,
-            ),  # with split
-            (
-                np.array([-1.0, 1.0]),
-                np.array([-1.0, -1.0]),
-                np.array([False, False]),
-                0.0,
-            ),  # without split
-        ],
-    )
-    def test_xgboost(
-        self,
-        g: np.ndarray,
-        h: np.ndarray,
-        target_groups: np.ndarray,
-        score_exp: float,
-    ):
-        growth_params = dtree.TreeGrowthParameters(lam=0.0)
-        y = None
-
-        # line to test
-        score = dtree.calc_xgboost_split_score(
-            y, target_groups, g, h, growth_params
-        )
-
-        assert score == score_exp
 
 
 @pytest.mark.parametrize(
@@ -644,7 +319,7 @@ class Test_find_best_split:
         h: np.ndarray,
     ):
         is_homogenous = len(np.unique(y)) == 1
-        grow_params = dtree.TreeGrowthParameters()
+        grow_params = utils.TreeGrowthParameters()
         try:
             # line to test
             best = dtree.find_best_split(
@@ -696,7 +371,7 @@ class Test_find_best_split:
         h: np.ndarray,
     ):
         is_homogenous = len(np.unique(y)) == 1
-        grow_params = dtree.TreeGrowthParameters()
+        grow_params = utils.TreeGrowthParameters()
         try:
             # line to test
             best = dtree.find_best_split(
@@ -748,7 +423,7 @@ class Test_find_best_split:
         h: np.ndarray,
     ):
         is_homogenous = len(np.unique(y)) == 1
-        growth_params = dtree.TreeGrowthParameters()
+        growth_params = utils.TreeGrowthParameters()
         try:
             # line to test
             best = dtree.find_best_split(
@@ -801,7 +476,7 @@ class Test_find_best_split:
         h: np.ndarray,
     ):
         is_homogenous = len(np.unique(y)) == 1
-        growth_params = dtree.TreeGrowthParameters()
+        growth_params = utils.TreeGrowthParameters()
         try:
             # line to test
             best = dtree.find_best_split(
@@ -835,7 +510,7 @@ class Test_find_best_split:
                 score=-1.0, column=0, threshold=0.0, target_groups=np.array([])
             ),
             None,
-            dtree.TreeGrowthParameters(),
+            utils.TreeGrowthParameters(),
             False,
         ),
         # parent is None #2
@@ -844,7 +519,7 @@ class Test_find_best_split:
                 score=-1.0, column=0, threshold=0.0, target_groups=np.array([])
             ),
             dtree.Node(measure=dtree.SplitScore("bla")),
-            dtree.TreeGrowthParameters(),
+            utils.TreeGrowthParameters(),
             False,
         ),
         # split is sufficient
@@ -853,7 +528,7 @@ class Test_find_best_split:
                 score=-1.0, column=0, threshold=0.0, target_groups=np.array([])
             ),
             dtree.Node(measure=dtree.SplitScore("bla", value=-1.1)),
-            dtree.TreeGrowthParameters(min_improvement=0.01),
+            utils.TreeGrowthParameters(min_improvement=0.01),
             False,
         ),
         # split is insufficient
@@ -862,7 +537,7 @@ class Test_find_best_split:
                 score=-1.0, column=0, threshold=0.0, target_groups=np.array([])
             ),
             dtree.Node(measure=dtree.SplitScore("bla", value=-1.1)),
-            dtree.TreeGrowthParameters(min_improvement=0.2),
+            utils.TreeGrowthParameters(min_improvement=0.2),
             True,
         ),
     ],
@@ -870,7 +545,7 @@ class Test_find_best_split:
 def test_check_if_gain_insufficient(
     best: dtree.BestSplit,
     parent_node: dtree.Node,
-    growth_params: dtree.TreeGrowthParameters,
+    growth_params: utils.TreeGrowthParameters,
     is_insufficient_exp: bool,
 ):
     # line to test
@@ -892,7 +567,7 @@ class Test_grow_tree:
 
     def test_baselevel(self):
         # test returned leaf node
-        growth_params = dtree.TreeGrowthParameters()
+        growth_params = utils.TreeGrowthParameters()
         parent_node = None
         is_baselevel = True
         reason = "very custom leaf node comment"
@@ -916,7 +591,7 @@ class Test_grow_tree:
 
     def test_split_improvement_insufficient(self):
         # test split improvement below minimum
-        growth_params = dtree.TreeGrowthParameters(min_improvement=0.2)
+        growth_params = utils.TreeGrowthParameters(min_improvement=0.2)
         parent_score = -1.0
         new_score = -0.9
         best = dtree.BestSplit(
@@ -968,7 +643,7 @@ class Test_grow_tree:
 
     def test_split_improvement_sufficient(self):
         # test split improvement above minumum, leading to two leaf nodes
-        growth_params = dtree.TreeGrowthParameters(min_improvement=0.0)
+        growth_params = utils.TreeGrowthParameters(min_improvement=0.0)
         parent_score = -1.0
         new_score = -0.9
         best = dtree.BestSplit(
@@ -1111,7 +786,7 @@ class TestDecisionTreeTemplate:
         assert not hasattr(self.model, "growth_params_")
 
         self.model._organize_growth_parameters()
-        assert isinstance(self.model.growth_params_, dtree.TreeGrowthParameters)
+        assert isinstance(self.model.growth_params_, utils.TreeGrowthParameters)
 
     def test_fit(self):
         try:
@@ -1180,6 +855,7 @@ class TestDecisionTreeClassifier:
         assert (predictions == self.y).all()
 
 
+@pytest.mark.slow
 @parametrize_with_checks(
     [dtree.DecisionTreeRegressor(), dtree.DecisionTreeClassifier()]
 )

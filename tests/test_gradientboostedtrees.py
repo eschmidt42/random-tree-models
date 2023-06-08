@@ -87,6 +87,7 @@ class TestGradientBoostedTreesClassifier:
         assert (predictions == self.y).all()
 
 
+@pytest.mark.slow
 @parametrize_with_checks(
     [gbt.GradientBoostedTreesRegressor(), gbt.GradientBoostedTreesClassifier()]
 )
