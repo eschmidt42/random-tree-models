@@ -88,6 +88,37 @@ class BestSplit:
     default_is_left: StrictBool = None
 
 
+# TODO: add unit test
+def get_thresholds_and_target_groups(
+    feature_values: np.ndarray,
+) -> T.Generator[T.Tuple[np.ndarray, np.ndarray, bool], None, None]:
+    "Creates a generator for split finding, returning the used threshold, the target groups and a bool indicating if the default direction is left"
+    is_missing = np.isnan(feature_values)
+    is_finite = np.logical_not(is_missing)
+    all_finite = is_finite.all()
+
+    if all_finite:
+        default_direction_is_left = None
+        for threshold in feature_values[1:]:
+            target_groups = feature_values < threshold
+            yield (threshold, target_groups, default_direction_is_left)
+    else:
+        finite_feature_values = feature_values[is_finite]
+
+        for threshold in finite_feature_values[1:]:
+            # default direction left - feature value <= threshold or missing  (i.e. missing are included left of the threshold)
+            target_groups = np.logical_or(
+                feature_values < threshold, is_missing
+            )
+            yield (threshold, target_groups, True)
+
+            # default direction right - feature value <= threshold and finite (i.e. missing are included right of the threshold)
+            target_groups = np.logical_and(
+                feature_values < threshold, is_finite
+            )
+            yield (threshold, target_groups, False)
+
+
 def find_best_split(
     X: np.ndarray,
     y: np.ndarray,
@@ -97,85 +128,42 @@ def find_best_split(
     h: np.ndarray = None,
     growth_params: utils.TreeGrowthParameters = None,
 ) -> BestSplit:
-    """ """
+    """Find the best split, detecting the "default direction" with missing data."""
+
     if len(np.unique(y)) == 1:
         raise ValueError(
             f"Tried to find a split for homogenous y: {y[:3]} ... {y[-3:]}"
         )
 
-    best_score = None
-    best_column = None
-    best_threshold = None
-    best_target_groups = None
-    best_default_direction_is_left = None
+    best = None  # this will be an BestSplit instance
 
     for array_column in range(X.shape[1]):
         feature_values = X[:, array_column]
-        is_missing = np.isnan(feature_values)
-        is_finite = np.logical_not(is_missing)
 
-        # if there are no nans
-        if is_finite.all():
-            for threshold in feature_values[1:]:
-                target_groups = feature_values < threshold
-                split_score = scoring.SplitScoreMetrics[measure_name](
-                    y,
-                    target_groups,
-                    yhat=yhat,
-                    g=g,
-                    h=h,
-                    growth_params=growth_params,
+        for (
+            threshold,
+            target_groups,
+            default_is_left,
+        ) in get_thresholds_and_target_groups(feature_values):
+            split_score = scoring.SplitScoreMetrics[measure_name](
+                y,
+                target_groups,
+                yhat=yhat,
+                g=g,
+                h=h,
+                growth_params=growth_params,
+            )
+
+            if best is None or split_score > best.score:
+                best = BestSplit(
+                    score=float(split_score),
+                    column=int(array_column),
+                    threshold=float(threshold),
+                    target_groups=target_groups,
+                    default_is_left=default_is_left,
                 )
 
-                if best_score is None or split_score > best_score:
-                    best_score = split_score
-                    best_column = array_column
-                    best_threshold = threshold
-                    best_target_groups = target_groups
-
-        else:  # there are nans
-            finite_feature_values = feature_values[is_finite]
-
-            for threshold in finite_feature_values[1:]:
-                # shuffling all missing left and right and comparing what "default direction" optimizes the loss.
-                # so either left of the threshold includes or excludes missing values.
-                # based on Chen et al. 2016, XGBoost: A Scalable Tree Boosting System
-                # algorithm 3, sparsity-aware split finding
-                for default_direction_left in [True, False]:
-                    if (
-                        default_direction_left
-                    ):  # feature value <= threshold or missing
-                        target_groups = np.logical_or(
-                            feature_values < threshold, is_missing
-                        )
-                    else:  # feature value <= threshold and finite
-                        target_groups = np.logical_and(
-                            feature_values < threshold, is_finite
-                        )
-
-                    split_score = scoring.SplitScoreMetrics[measure_name](
-                        y,
-                        target_groups,
-                        yhat=yhat,
-                        g=g,
-                        h=h,
-                        growth_params=growth_params,
-                    )
-
-                    if best_score is None or split_score > best_score:
-                        best_score = split_score
-                        best_column = array_column
-                        best_threshold = threshold
-                        best_target_groups = target_groups
-                        best_default_direction_is_left = default_direction_left
-
-    return BestSplit(
-        float(best_score),
-        int(best_column),
-        float(best_threshold),
-        best_target_groups,
-        best_default_direction_is_left,
-    )
+    return best
 
 
 def check_if_split_sensible(
