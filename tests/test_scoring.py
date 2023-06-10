@@ -3,6 +3,7 @@ import pytest
 
 import random_tree_models.scoring as scoring
 import random_tree_models.utils as utils
+from random_tree_models import scoring_rs
 
 
 @pytest.mark.parametrize(
@@ -125,6 +126,30 @@ def test_gini_impurity(y: np.ndarray):
     try:
         # line to test
         g = scoring.gini_impurity(y)
+    except ValueError as ex:
+        if len(y) == 0:
+            pytest.xfail("gini_impurity properly failed because of empty y")
+        else:
+            raise ex
+    else:
+        if len(y) == 0:
+            pytest.fail("gini_impurity should have failed but didn't")
+
+        assert np.less_equal(g, 0)
+
+
+@pytest.mark.parametrize(
+    "y",
+    [
+        np.array([]),
+        np.array([1]),
+        np.array([1, 2]),
+    ],
+)
+def test_gini_impurity_rs(y: np.ndarray):
+    try:
+        # line to test
+        g = scoring_rs.gini_impurity(y)
     except ValueError as ex:
         if len(y) == 0:
             pytest.xfail("gini_impurity properly failed because of empty y")
