@@ -415,7 +415,7 @@ class DecisionTreeTemplate(base.BaseEstimator):
         self.growth_params_ = utils.TreeGrowthParameters(
             max_depth=self.max_depth,
             min_improvement=self.min_improvement,
-            lam=self.lam,
+            lam=-abs(self.lam),
         )
 
     def fit(
