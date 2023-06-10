@@ -163,6 +163,20 @@ def test_gini_impurity_rs(y: np.ndarray):
 
 
 @pytest.mark.parametrize(
+    "y",
+    [
+        np.array([1]),
+        np.array([1, 2]),
+    ],
+)
+def test_gini_impurity_py_vs_rs(y: np.ndarray):
+    g_py = scoring.gini_impurity(y)
+    g_rs = scoring_rs.gini_impurity(y)
+
+    assert np.isclose(g_py, g_rs)
+
+
+@pytest.mark.parametrize(
     "y, target_groups, g_exp",
     [
         (np.array([]), None, None),
