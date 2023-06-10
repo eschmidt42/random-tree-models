@@ -47,6 +47,7 @@ class LeafWeightSchemes(Enum):
     variance = partial(leaf_weight_mean)
     entropy = partial(leaf_weight_mean)
     gini = partial(leaf_weight_mean)
+    gini_rs = partial(leaf_weight_mean)
     xgboost = partial(leaf_weight_xgboost)
 
     def __call__(

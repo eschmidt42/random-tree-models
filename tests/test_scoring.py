@@ -207,6 +207,36 @@ def test_calc_gini_impurity(
 
 
 @pytest.mark.parametrize(
+    "y, target_groups, g_exp",
+    [
+        (np.array([]), None, None),
+        (np.array([1]), np.array([False, True]), None),
+        (np.array([1]), np.array([True]), 0),
+        (np.array([1, 1]), np.array([True, True]), 0),
+        (np.array([1]), np.array([False]), 0),
+        (np.array([1, 1]), np.array([False, False]), 0),
+        (np.array([1, 1, 2, 2]), np.array([False, False, True, True]), 0),
+        (np.array([1, 1, 2, 2]), np.array([False, True, False, True]), -0.5),
+    ],
+)
+def test_calc_gini_impurity_rs(
+    y: np.ndarray, target_groups: np.ndarray, g_exp: float
+):
+    try:
+        # line to test
+        g = scoring.calc_gini_impurity_rs(y, target_groups)
+    except ValueError as ex:
+        if g_exp is None:
+            pytest.xfail("Properly raised error calculating the gini impurity")
+        else:
+            raise ex
+    else:
+        if g_exp is None:
+            pytest.fail("calc_gini_impurity should have failed but didn't")
+        assert g == g_exp
+
+
+@pytest.mark.parametrize(
     "g,h,is_bad",
     [
         (np.array([]), np.array([]), True),
@@ -305,6 +335,10 @@ class TestSplitScoreMetrics:
 
     def test_gini(self):
         g = scoring.SplitScoreMetrics["gini"](self.y, self.target_groups)
+        assert g == self.g_exp
+
+    def test_gini_rs(self):
+        g = scoring.SplitScoreMetrics["gini_rs"](self.y, self.target_groups)
         assert g == self.g_exp
 
     def test_entropy(self):

@@ -4,6 +4,7 @@ from functools import partial
 import numpy as np
 
 import random_tree_models.utils as utils
+from random_tree_models import scoring_rs
 
 
 def check_y_and_target_groups(y: np.ndarray, target_groups: np.ndarray = None):
@@ -115,6 +116,26 @@ def calc_gini_impurity(
     return g
 
 
+def calc_gini_impurity_rs(
+    y: np.ndarray, target_groups: np.ndarray, **kwargs
+) -> float:
+    """Calculates the gini impurity of a split
+
+    Based on: https://scikit-learn.org/stable/modules/tree.html#classification-criteria
+    """
+
+    check_y_and_target_groups(y, target_groups=target_groups)
+
+    w_left = target_groups.sum() / len(target_groups)
+    w_right = 1.0 - w_left
+
+    g_left = scoring_rs.gini_impurity(y[target_groups]) if w_left > 0 else 0
+    g_right = scoring_rs.gini_impurity(y[~target_groups]) if w_right > 0 else 0
+
+    g = w_left * g_left + w_right * g_right
+    return g
+
+
 def xgboost_split_score(
     g: np.ndarray, h: np.ndarray, growth_params: utils.TreeGrowthParameters
 ) -> float:
@@ -172,6 +193,7 @@ class SplitScoreMetrics(Enum):
     variance = partial(calc_variance)
     entropy = partial(calc_entropy)
     gini = partial(calc_gini_impurity)
+    gini_rs = partial(calc_gini_impurity_rs)
     # variance for split score because Friedman et al. 2001 in Algorithm 1
     # step 4 minimize the squared error between actual and predicted dloss/dyhat
     friedman_binary_classification = partial(calc_variance)
