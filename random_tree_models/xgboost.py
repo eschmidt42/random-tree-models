@@ -14,8 +14,9 @@ import typing as T
 
 import numpy as np
 import pandas as pd
+from pydantic.dataclasses import dataclass
 from rich.progress import track
-from sklearn import base
+from sklearn import base, neighbors
 from sklearn.utils.multiclass import check_classification_targets, unique_labels
 from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 
@@ -32,6 +33,8 @@ class XGBoostTemplate(base.BaseEstimator):
         min_improvement: float = 0.0,
         lam: float = 0.0,
         force_all_finite: bool = True,
+        use_hist: bool = False,
+        n_bins: int = 256,
     ) -> None:
         self.n_trees = n_trees
         self.measure_name = measure_name
@@ -40,6 +43,8 @@ class XGBoostTemplate(base.BaseEstimator):
         self.n_trees = n_trees
         self.lam = lam
         self.force_all_finite = force_all_finite
+        self.use_hist = use_hist
+        self.n_bins = n_bins
 
     def fit(
         self,
@@ -61,6 +66,58 @@ def compute_derivatives_negative_least_squares(
     return g, h
 
 
+# TODO: add tests:
+# * X_hist is integer based
+# * X_hist has the same shape as X
+# * X_hist has the same number of unique values as n_bins per column
+# * the function fails if X and h are not of the same length
+# TODO: add handling of missing values in X
+def xgboost_histogrammify_with_h(
+    X: np.ndarray, h: np.ndarray, n_bins: int
+) -> T.Tuple[np.ndarray, T.List[np.ndarray]]:
+    """Converts X into a histogram representation using XGBoost paper eq 8 and 9 using 2nd order gradient statistics as weights"""
+    X_hist = np.zeros_like(X, dtype=int)
+    all_x_bin_edges = []
+    for i in range(X.shape[1]):
+        order = np.argsort(X[:, i])
+        h_ordered = h[order]
+        x_ordered = X[order, i]
+
+        # compute rank using min-max normalization of cumulative sum
+        # this deviates from the paper
+        rank = h_ordered.cumsum()
+        rank = (rank - rank[0]) / (rank[-1] - rank[0])
+
+        rank_bin_edges = np.histogram_bin_edges(rank, bins=n_bins)
+        bin_assignments = pd.cut(
+            rank, bins=rank_bin_edges, labels=False, include_lowest=True
+        )
+
+        x_bin_edges = np.interp(rank_bin_edges, rank, x_ordered)
+        all_x_bin_edges.append(x_bin_edges)
+
+        X_hist[order, i] = bin_assignments
+
+    return X_hist, all_x_bin_edges
+
+
+# TODO: add test that compares the output with that of xgboost_histogrammify_with_h
+def xgboost_histogrammify_with_x_bin_edges(
+    X: np.ndarray, all_x_bin_edges: T.List[np.ndarray]
+) -> T.Tuple[np.ndarray, T.List[np.ndarray]]:
+    """Converts X into a histogram representation using XGBoost paper eq 8 and 9 using 2nd order gradient statistics as weights"""
+    X_hist = np.zeros_like(X, dtype=int)
+
+    for i in range(X.shape[1]):
+        bin_assignments = pd.cut(
+            X[:, i], bins=all_x_bin_edges[i], labels=False, include_lowest=True
+        )
+
+        X_hist[:, i] = bin_assignments
+
+    return X_hist
+
+
 class XGBoostRegressor(XGBoostTemplate, base.RegressorMixin):
     """XGBoost regressor
 
@@ -80,6 +137,12 @@ class XGBoostRegressor(XGBoostTemplate, base.RegressorMixin):
         g, h = compute_derivatives_negative_least_squares(
             y, self.start_estimate_
         )
+        if self.use_hist:
+            X_hist, all_x_bin_edges = xgboost_histogrammify_with_h(
+                X, h, n_bins=self.n_bins
+            )
+            self.all_x_bin_edges_ = all_x_bin_edges
+            X = X_hist
 
         for _ in track(
             range(self.n_trees), total=self.n_trees, description="tree"
@@ -108,6 +171,10 @@ class XGBoostRegressor(XGBoostTemplate, base.RegressorMixin):
 
         # baseline estimate
         y = np.ones(X.shape[0]) * self.start_estimate_
+
+        # map to bins
+        if self.use_hist:
+            X = xgboost_histogrammify_with_x_bin_edges(X, self.all_x_bin_edges_)
 
         # improve on baseline
         for tree in track(
@@ -177,6 +244,7 @@ class XGBoostClassifier(XGBoostTemplate, base.ClassifierMixin):
         self.classes_, y = np.unique(y, return_inverse=True)
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
         self.gammas_ = []
+        self.all_x_bin_edges_ = []
 
         # convert y from True/False to 1/-1 for binomial log-likelihood
         y = self._bool_to_float(y)
@@ -190,6 +258,14 @@ class XGBoostClassifier(XGBoostTemplate, base.ClassifierMixin):
         ):
             g, h = compute_derivatives_binomial_loglikelihood(y, yhat)
 
+            if self.use_hist:
+                _X, all_x_bin_edges = xgboost_histogrammify_with_h(
+                    X, h, n_bins=self.n_bins
+                )
+                self.all_x_bin_edges_.append(all_x_bin_edges)
+            else:
+                _X = X
+
             new_tree = dtree.DecisionTreeRegressor(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
@@ -197,7 +273,7 @@ class XGBoostClassifier(XGBoostTemplate, base.ClassifierMixin):
                 lam=self.lam,
                 force_all_finite=self.force_all_finite,
             )
-            new_tree.fit(X, y, g=g, h=h)
+            new_tree.fit(_X, y, g=g, h=h)
             self.trees_.append(new_tree)
 
             # update _y
@@ -216,10 +292,17 @@ class XGBoostClassifier(XGBoostTemplate, base.ClassifierMixin):
 
         g = np.ones(X.shape[0]) * self.start_estimate_
 
-        for _, tree in track(
+        for boost, tree in track(
             enumerate(self.trees_), description="tree", total=len(self.trees_)
         ):  # loop boosts
-            g += tree.predict(X)
+            if self.use_hist:
+                _X = xgboost_histogrammify_with_x_bin_edges(
+                    X, self.all_x_bin_edges_[boost]
+                )
+            else:
+                _X = X
+
+            g += tree.predict(_X)
 
         proba = 1 / (1 + np.exp(-2.0 * g))
         proba = np.array([1 - proba, proba]).T
