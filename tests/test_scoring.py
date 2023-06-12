@@ -87,6 +87,30 @@ def test_entropy(y: np.ndarray):
 
 
 @pytest.mark.parametrize(
+    "y",
+    [
+        np.array([]),
+        np.array([1]),
+        np.array([1, 2]),
+    ],
+)
+def test_entropy_rs(y: np.ndarray):
+    try:
+        # line to test
+        h = scoring_rs.entropy(y)
+    except ValueError as ex:
+        if len(y) == 0:
+            pytest.xfail("entropy properly failed because of empty y")
+        else:
+            raise ex
+    else:
+        if len(y) == 0:
+            pytest.fail("entropy should have failed but didn't")
+
+        assert np.less_equal(h, 0)
+
+
+@pytest.mark.parametrize(
     "y, target_groups, h_exp",
     [
         (np.array([]), None, None),
@@ -103,6 +127,36 @@ def test_calc_entropy(y: np.ndarray, target_groups: np.ndarray, h_exp: float):
     try:
         # line to test
         h = scoring.calc_entropy(y, target_groups)
+    except ValueError as ex:
+        if h_exp is None:
+            pytest.xfail("Properly raised error calculating the entropy")
+        else:
+            raise ex
+    else:
+        if h_exp is None:
+            pytest.fail("calc_entropy should have failed but didn't")
+        assert h == h_exp
+
+
+@pytest.mark.parametrize(
+    "y, target_groups, h_exp",
+    [
+        (np.array([]), None, None),
+        (np.array([1]), np.array([False, True]), None),
+        (np.array([1]), np.array([True]), 0),
+        (np.array([1, 1]), np.array([True, True]), 0),
+        (np.array([1]), np.array([False]), 0),
+        (np.array([1, 1]), np.array([False, False]), 0),
+        (np.array([1, 1, 2, 2]), np.array([False, False, True, True]), 0),
+        (np.array([1, 1, 2, 2]), np.array([False, True, False, True]), -1.0),
+    ],
+)
+def test_calc_entropy_rs(
+    y: np.ndarray, target_groups: np.ndarray, h_exp: float
+):
+    try:
+        # line to test
+        h = scoring.calc_entropy_rs(y, target_groups)
     except ValueError as ex:
         if h_exp is None:
             pytest.xfail("Properly raised error calculating the entropy")
@@ -343,6 +397,10 @@ class TestSplitScoreMetrics:
 
     def test_entropy(self):
         h = scoring.SplitScoreMetrics["entropy"](self.y, self.target_groups)
+        assert h == self.h_exp
+
+    def test_entropy(self):
+        h = scoring.SplitScoreMetrics["entropy_rs"](self.y, self.target_groups)
         assert h == self.h_exp
 
     def test_variance(self):
