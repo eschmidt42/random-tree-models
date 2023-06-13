@@ -25,6 +25,8 @@ import random_tree_models.leafweights as leafweights
 import random_tree_models.scoring as scoring
 import random_tree_models.utils as utils
 
+logger = utils.logger
+
 
 @dataclass(validate_on_init=True)
 class SplitScore:
@@ -88,9 +90,39 @@ class BestSplit:
     default_is_left: StrictBool = None
 
 
+# TODO: add tests
+def select_thresholds(
+    feature_values: np.ndarray, growth_params: utils.TreeGrowthParameters
+) -> np.ndarray:
+    "Selects thresholds to use for splitting"
+
+    rng = np.random.RandomState(growth_params.random_state)
+    threshold_params = growth_params.threshold_params
+
+    if threshold_params.method == utils.ThresholdSelectionMethod.bruteforce:
+        return feature_values[1:]
+    elif threshold_params.method == utils.ThresholdSelectionMethod.random:
+        if len(feature_values) - 1 <= threshold_params.n_thresholds:
+            return feature_values[1:]
+        else:
+            return rng.choice(
+                feature_values[1:],
+                size=threshold_params.n_thresholds,
+                replace=False,
+            )
+    elif threshold_params.method == utils.ThresholdSelectionMethod.quantile:
+        dq = int(1 / threshold_params.quantile) + 1
+        qs = np.linspace(0, 1, dq)
+        return np.quantile(feature_values[1:], qs)
+    else:
+        raise NotImplementedError(
+            f"Unknown threshold selection method: {threshold_params.method}"
+        )
+
+
 # TODO: add unit test
 def get_thresholds_and_target_groups(
-    feature_values: np.ndarray,
+    feature_values: np.ndarray, growth_params: utils.TreeGrowthParameters
 ) -> T.Generator[T.Tuple[np.ndarray, np.ndarray, bool], None, None]:
     "Creates a generator for split finding, returning the used threshold, the target groups and a bool indicating if the default direction is left"
     is_missing = np.isnan(feature_values)
@@ -99,13 +131,16 @@ def get_thresholds_and_target_groups(
 
     if all_finite:
         default_direction_is_left = None
-        for threshold in feature_values[1:]:
+        thresholds = select_thresholds(feature_values, growth_params)
+
+        for threshold in thresholds:
             target_groups = feature_values < threshold
             yield (threshold, target_groups, default_direction_is_left)
     else:
         finite_feature_values = feature_values[is_finite]
+        thresholds = select_thresholds(finite_feature_values, growth_params)
 
-        for threshold in finite_feature_values[1:]:
+        for threshold in thresholds:
             # default direction left - feature value <= threshold or missing  (i.e. missing are included left of the threshold)
             target_groups = np.logical_or(
                 feature_values < threshold, is_missing
@@ -144,7 +179,7 @@ def find_best_split(
             threshold,
             target_groups,
             default_is_left,
-        ) in get_thresholds_and_target_groups(feature_values):
+        ) in get_thresholds_and_target_groups(feature_values, growth_params):
             split_score = scoring.SplitScoreMetrics[measure_name](
                 y,
                 target_groups,
@@ -407,6 +442,9 @@ class DecisionTreeTemplate(base.BaseEstimator):
         lam: float = 0.0,
         frac_subsamples: float = 1.0,
         frac_features: float = 1.0,
+        threshold_method: utils.ThresholdSelectionMethod = "bruteforce",
+        threshold_quantile: float = 0.1,
+        n_thresholds: int = 100,
         random_state: int = 42,
     ) -> None:
         self.max_depth = max_depth
@@ -416,6 +454,9 @@ class DecisionTreeTemplate(base.BaseEstimator):
         self.frac_subsamples = frac_subsamples
         self.frac_features = frac_features
         self.random_state = random_state
+        self.threshold_method = threshold_method
+        self.threshold_quantile = threshold_quantile
+        self.n_thresholds = n_thresholds
 
     def _organize_growth_parameters(self):
         self.growth_params_ = utils.TreeGrowthParameters(
@@ -425,6 +466,12 @@ class DecisionTreeTemplate(base.BaseEstimator):
             frac_subsamples=float(self.frac_subsamples),
             frac_features=float(self.frac_features),
             random_state=int(self.random_state),
+            threshold_params=utils.ThresholdSelectionParameters(
+                method=self.threshold_method,
+                quantile=self.threshold_quantile,
+                n_thresholds=self.n_thresholds,
+                random_state=int(self.random_state),
+            ),
         )
 
     # TODO: add tests
