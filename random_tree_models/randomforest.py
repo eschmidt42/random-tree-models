@@ -11,7 +11,6 @@ import random_tree_models.decisiontree as dtree
 import random_tree_models.gradientboostedtrees as gbt
 
 
-# TODO: add tests
 class RandomForestTemplate(base.BaseEstimator):
     def __init__(
         self,
@@ -45,13 +44,15 @@ class RandomForestTemplate(base.BaseEstimator):
         raise NotImplementedError()
 
 
-# TODO: add tests
 class RandomForestRegressor(RandomForestTemplate, base.RegressorMixin):
     """Random forest regressor
 
     Breiman et al. 2001, Random Forests
     https://doi.org/10.1023/A:1010933404324
     """
+
+    def __init__(self, measure_name: str = "variance", **kwargs) -> None:
+        super().__init__(measure_name=measure_name, **kwargs)
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "RandomForestRegressor":
         X, y = check_X_y(X, y, force_all_finite=self.force_all_finite)
@@ -98,13 +99,15 @@ class RandomForestRegressor(RandomForestTemplate, base.RegressorMixin):
         return y
 
 
-# TODO: add tests
 class RandomForestClassifier(RandomForestTemplate, base.ClassifierMixin):
     """Random forest classifier
 
     Breiman et al. 2001, Random Forests
     https://doi.org/10.1023/A:1010933404324
     """
+
+    def __init__(self, measure_name: str = "gini", **kwargs) -> None:
+        super().__init__(measure_name=measure_name, **kwargs)
 
     def _more_tags(self) -> T.Dict[str, bool]:
         """Describes to scikit-learn parametrize_with_checks the scope of this class
