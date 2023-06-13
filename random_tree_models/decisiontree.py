@@ -54,6 +54,8 @@ class Node:
     n_obs: StrictInt = None  # number of observations in node
     reason: StrictStr = None  # place for some comment
 
+    depth: StrictInt = None  # depth of the node
+
     def __post_init__(self):
         # unique identifier of the node
         self.node_id = uuid.uuid4()
@@ -114,6 +116,13 @@ def select_thresholds(
         dq = int(1 / threshold_params.quantile) + 1
         qs = np.linspace(0, 1, dq)
         return np.quantile(feature_values[1:], qs)
+    elif threshold_params.method == utils.ThresholdSelectionMethod.uniform:
+        x = np.linspace(
+            feature_values.min(),
+            feature_values.max(),
+            threshold_params.n_thresholds + 2,
+        )
+        return rng.choice(x[1:], size=[1])
     else:
         raise NotImplementedError(
             f"Unknown threshold selection method: {threshold_params.method}"
@@ -326,6 +335,7 @@ def grow_tree(
             measure=SplitScore(measure_name, score=score),
             n_obs=n_obs,
             reason=reason,
+            depth=depth,
         )
 
     # find best split
@@ -345,6 +355,7 @@ def grow_tree(
             measure=SplitScore(measure_name, score=score),
             n_obs=n_obs,
             reason=reason,
+            depth=depth,
         )
         return leaf_node
 
@@ -357,6 +368,7 @@ def grow_tree(
         measure=SplitScore(measure_name, best.score),
         n_obs=n_obs,
         reason="",
+        depth=depth,
     )
 
     # descend left

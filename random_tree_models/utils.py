@@ -11,6 +11,7 @@ class ThresholdSelectionMethod(Enum):
     bruteforce = "bruteforce"
     quantile = "quantile"
     random = "random"
+    uniform = "uniform"
 
 
 # TODO: add tests
