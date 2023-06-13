@@ -405,18 +405,64 @@ class DecisionTreeTemplate(base.BaseEstimator):
         max_depth: int = 2,
         min_improvement: float = 0.0,
         lam: float = 0.0,
+        frac_subsamples: float = 1.0,
+        frac_features: float = 1.0,
+        random_state: int = 42,
     ) -> None:
         self.max_depth = max_depth
         self.measure_name = measure_name
         self.min_improvement = min_improvement
         self.lam = lam
+        self.frac_subsamples = frac_subsamples
+        self.frac_features = frac_features
+        self.random_state = random_state
 
     def _organize_growth_parameters(self):
         self.growth_params_ = utils.TreeGrowthParameters(
             max_depth=self.max_depth,
             min_improvement=self.min_improvement,
             lam=-abs(self.lam),
+            frac_subsamples=float(self.frac_subsamples),
+            frac_features=float(self.frac_features),
+            random_state=int(self.random_state),
         )
+
+    # TODO: add tests
+    def _select_samples_and_features(
+        self, X: np.ndarray, y: np.ndarray
+    ) -> T.Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        if not hasattr(self, "growth_params_"):
+            raise ValueError(f"Try calling `fit` first.")
+
+        ix = np.arange(len(X))
+        rng = np.random.RandomState(self.growth_params_.random_state)
+        if self.growth_params_.frac_subsamples < 1.0:
+            n_samples = int(self.growth_params_.frac_subsamples * len(X))
+            ix_samples = rng.choice(ix, size=n_samples, replace=False)
+        else:
+            ix_samples = ix
+
+        if self.frac_features < 1.0:
+            n_columns = int(X.shape[1] * self.frac_features)
+            ix_features = rng.choice(
+                np.arange(X.shape[1]),
+                size=n_columns,
+                replace=False,
+            )
+        else:
+            ix_features = np.arange(X.shape[1])
+
+        _X = X[ix_samples, :]
+        _X = _X[:, ix_features]
+
+        _y = y[ix_samples]
+        return _X, _y, ix_features
+
+    # TODO: add tests
+    def _select_features(
+        self, X: np.ndarray, ix_features: np.ndarray
+    ) -> np.ndarray:
+        return X[:, ix_features]
 
     def fit(
         self,
@@ -453,9 +499,12 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
         self._organize_growth_parameters()
         X, y = check_X_y(X, y, force_all_finite=self.force_all_finite)
         self.n_features_in_ = X.shape[1]
+
+        _X, _y, self.ix_features_ = self._select_samples_and_features(X, y)
+
         self.tree_ = grow_tree(
-            X,
-            y,
+            _X,
+            _y,
             measure_name=self.measure_name,
             growth_params=self.growth_params_,
             **kwargs,
@@ -470,7 +519,9 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
-        y = predict_with_tree(self.tree_, X)
+        _X = self._select_features(X, self.ix_features_)
+
+        y = predict_with_tree(self.tree_, _X)
 
         return y
 
@@ -512,9 +563,11 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
         self.n_features_in_ = X.shape[1]
         self.classes_, y = np.unique(y, return_inverse=True)
 
+        _X, _y, self.ix_features_ = self._select_samples_and_features(X, y)
+
         self.tree_ = grow_tree(
-            X,
-            y,
+            _X,
+            _y,
             measure_name=self.measure_name,
             growth_params=self.growth_params_,
         )
@@ -528,7 +581,9 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
-        proba = predict_with_tree(self.tree_, X)
+        _X = self._select_features(X, self.ix_features_)
+
+        proba = predict_with_tree(self.tree_, _X)
         proba = np.array([1 - proba, proba]).T
         return proba
 

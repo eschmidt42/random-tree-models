@@ -14,9 +14,8 @@ import typing as T
 
 import numpy as np
 import pandas as pd
-from pydantic.dataclasses import dataclass
 from rich.progress import track
-from sklearn import base, neighbors
+from sklearn import base
 from sklearn.utils.multiclass import check_classification_targets, unique_labels
 from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 
