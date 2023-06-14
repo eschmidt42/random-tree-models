@@ -63,7 +63,7 @@ class Node:
 
 
 def check_is_baselevel(
-    y: np.ndarray, node: Node, depth: int, max_depth: int
+    y: np.ndarray, depth: int, max_depth: int
 ) -> T.Tuple[bool, str]:
     """Verifies if the tree traversal reached the baselevel / a leaf
     * group homogeneous / cannot sensibly be splitted further
@@ -367,7 +367,7 @@ def grow_tree(
         )
 
     is_baselevel, reason = check_is_baselevel(
-        y, parent_node, depth, max_depth=growth_params.max_depth
+        y, depth, max_depth=growth_params.max_depth
     )
 
     # compute leaf weight (for prediction) and node score (for split gain check)

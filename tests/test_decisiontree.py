@@ -155,7 +155,7 @@ def test_check_is_baselevel(y, depths):
 
     # line to test
     is_baselevel, msg = dtree.check_is_baselevel(
-        y, node, depth=depth, max_depth=max_depth
+        y, depth=depth, max_depth=max_depth
     )
 
     assert is_baselevel == is_baselevel_exp
