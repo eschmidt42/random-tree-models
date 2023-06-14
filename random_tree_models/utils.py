@@ -7,6 +7,13 @@ from rich.logging import RichHandler
 
 
 # TODO: add tests
+class ColumnSelectionMethod(Enum):
+    ascending = "ascending"
+    largest_delta = "largest_delta"
+    random = "random"
+
+
+# TODO: add tests
 class ThresholdSelectionMethod(Enum):
     bruteforce = "bruteforce"
     quantile = "quantile"
@@ -52,6 +59,13 @@ class ThresholdSelectionParameters:
 
 # TODO: add tests
 @dataclass
+class ColumnSelectionParameters:
+    method: ColumnSelectionMethod
+    n_trials: StrictInt = None
+
+
+# TODO: add tests
+@dataclass
 class TreeGrowthParameters:
     max_depth: StrictInt
     min_improvement: StrictFloat = 0.0
@@ -63,6 +77,9 @@ class TreeGrowthParameters:
     random_state: StrictInt = 0
     threshold_params: ThresholdSelectionParameters = (
         ThresholdSelectionParameters("bruteforce", 0.1, 0, 100)
+    )
+    column_params: ColumnSelectionParameters = ColumnSelectionParameters(
+        ColumnSelectionMethod.ascending, None
     )
 
     def __post_init__(self):
