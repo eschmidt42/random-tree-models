@@ -26,7 +26,6 @@ def predict_with_isolationtree(tree: dtree.Node, X: np.ndarray) -> np.ndarray:
     return predictions
 
 
-# TODO: add tests
 class IsolationTree(dtree.DecisionTreeTemplate, base.OutlierMixin):
     """Isolation tree
 
@@ -87,7 +86,6 @@ class IsolationTree(dtree.DecisionTreeTemplate, base.OutlierMixin):
         return y
 
 
-# TODO: add tests
 class IsolationForest(base.BaseEstimator, base.OutlierMixin):
     """Isolation forest
 
