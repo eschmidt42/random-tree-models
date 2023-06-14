@@ -37,9 +37,13 @@ class IsolationTree(dtree.DecisionTreeTemplate, base.OutlierMixin):
     def __init__(
         self,
         force_all_finite: bool = True,
+        measure_name: str = "incrementing",
+        max_depth: int = 10,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(
+            measure_name=measure_name, max_depth=max_depth, **kwargs
+        )
         self.force_all_finite = force_all_finite
 
     def fit(
@@ -93,9 +97,9 @@ class IsolationForest(base.BaseEstimator, base.OutlierMixin):
 
     def __init__(
         self,
-        n_trees: int = 3,
+        n_trees: int = 100,
         measure_name: str = "incrementing",
-        max_depth: int = 2,
+        max_depth: int = 10,
         force_all_finite: bool = True,
         frac_subsamples: float = 2 / 3,
         frac_features: float = 1.0,
