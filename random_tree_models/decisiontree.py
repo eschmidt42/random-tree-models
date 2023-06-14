@@ -94,11 +94,12 @@ class BestSplit:
 
 # TODO: add tests
 def select_thresholds(
-    feature_values: np.ndarray, growth_params: utils.TreeGrowthParameters
+    feature_values: np.ndarray,
+    growth_params: utils.TreeGrowthParameters,
+    rng: np.random.RandomState,
 ) -> np.ndarray:
     "Selects thresholds to use for splitting"
 
-    rng = np.random.RandomState(growth_params.random_state)
     threshold_params = growth_params.threshold_params
 
     if threshold_params.method == utils.ThresholdSelectionMethod.bruteforce:
@@ -131,7 +132,9 @@ def select_thresholds(
 
 # TODO: add unit test
 def get_thresholds_and_target_groups(
-    feature_values: np.ndarray, growth_params: utils.TreeGrowthParameters
+    feature_values: np.ndarray,
+    growth_params: utils.TreeGrowthParameters,
+    rng: np.random.RandomState,
 ) -> T.Generator[T.Tuple[np.ndarray, np.ndarray, bool], None, None]:
     "Creates a generator for split finding, returning the used threshold, the target groups and a bool indicating if the default direction is left"
     is_missing = np.isnan(feature_values)
@@ -140,14 +143,16 @@ def get_thresholds_and_target_groups(
 
     if all_finite:
         default_direction_is_left = None
-        thresholds = select_thresholds(feature_values, growth_params)
+        thresholds = select_thresholds(feature_values, growth_params, rng)
 
         for threshold in thresholds:
             target_groups = feature_values < threshold
             yield (threshold, target_groups, default_direction_is_left)
     else:
         finite_feature_values = feature_values[is_finite]
-        thresholds = select_thresholds(finite_feature_values, growth_params)
+        thresholds = select_thresholds(
+            finite_feature_values, growth_params, rng
+        )
 
         for threshold in thresholds:
             # default direction left - feature value <= threshold or missing  (i.e. missing are included left of the threshold)
@@ -163,6 +168,43 @@ def get_thresholds_and_target_groups(
             yield (threshold, target_groups, False)
 
 
+# TODO: add tests
+def get_column(
+    X: np.ndarray,
+    growth_params: utils.TreeGrowthParameters,
+    rng: np.random.RandomState,
+) -> T.List[int]:
+    # select column order to split on
+    method = growth_params.column_params.method
+    n_columns_to_try = growth_params.column_params.n_trials
+
+    columns = list(range(X.shape[1]))
+    if method == utils.ColumnSelectionMethod.ascending:
+        pass
+    elif method == utils.ColumnSelectionMethod.random:
+        columns = np.array(columns)
+        rng.shuffle(columns)
+        columns = list(columns)
+    elif method == utils.ColumnSelectionMethod.largest_delta:
+        deltas = X.max(axis=0) - X.min(axis=0)
+        weights = deltas / deltas.sum()
+        # order = np.argsort(deltas)[::-1] # largest deltas first
+        columns = np.array(columns)
+        # sorted_columns = columns[order]
+        # columns = list(sorted_columns)
+        columns = rng.choice(
+            columns, p=weights, size=len(columns), replace=False
+        )
+        columns = list(columns)
+    else:
+        raise NotImplementedError(
+            f"Unknown column selection method: {growth_params.column_method}"
+        )
+    if n_columns_to_try is not None:
+        columns = columns[:n_columns_to_try]
+    return columns
+
+
 def find_best_split(
     X: np.ndarray,
     y: np.ndarray,
@@ -171,6 +213,7 @@ def find_best_split(
     g: np.ndarray = None,
     h: np.ndarray = None,
     growth_params: utils.TreeGrowthParameters = None,
+    rng: np.random.RandomState = np.random.RandomState(42),
 ) -> BestSplit:
     """Find the best split, detecting the "default direction" with missing data."""
 
@@ -181,14 +224,16 @@ def find_best_split(
 
     best = None  # this will be an BestSplit instance
 
-    for array_column in range(X.shape[1]):
+    for array_column in get_column(X, growth_params, rng):
         feature_values = X[:, array_column]
 
         for (
             threshold,
             target_groups,
             default_is_left,
-        ) in get_thresholds_and_target_groups(feature_values, growth_params):
+        ) in get_thresholds_and_target_groups(
+            feature_values, growth_params, rng
+        ):
             split_score = scoring.SplitScoreMetrics[measure_name](
                 y,
                 target_groups,
@@ -284,6 +329,7 @@ def grow_tree(
     growth_params: utils.TreeGrowthParameters = None,
     g: np.ndarray = None,
     h: np.ndarray = None,
+    random_state: int = 42,
     **kwargs,
 ) -> Node:
     """Implementation of the Classification And Regression Tree (CART) algorithm
@@ -339,8 +385,10 @@ def grow_tree(
         )
 
     # find best split
+    rng = np.random.RandomState(random_state)
+
     best = find_best_split(
-        X, y, measure_name, g=g, h=h, growth_params=growth_params
+        X, y, measure_name, g=g, h=h, growth_params=growth_params, rng=rng
     )
 
     # check if improvement due to split is below minimum requirement
@@ -370,6 +418,7 @@ def grow_tree(
         reason="",
         depth=depth,
     )
+    random_state_left, random_state_right = rng.randint(0, 2**32, size=2)
 
     # descend left
     _X, _y, _g, _h = select_arrays_for_child_node(True, best, X, y, g, h)
@@ -382,6 +431,7 @@ def grow_tree(
         growth_params=growth_params,
         g=_g,
         h=_h,
+        random_state=random_state_left,
     )
 
     # descend right
@@ -395,6 +445,7 @@ def grow_tree(
         growth_params=growth_params,
         g=_g,
         h=_h,
+        random_state=random_state_right,
     )
 
     return new_node
@@ -457,6 +508,8 @@ class DecisionTreeTemplate(base.BaseEstimator):
         threshold_method: utils.ThresholdSelectionMethod = "bruteforce",
         threshold_quantile: float = 0.1,
         n_thresholds: int = 100,
+        column_method: utils.ColumnSelectionMethod = "ascending",
+        n_columns_to_try: int = None,
         random_state: int = 42,
     ) -> None:
         self.max_depth = max_depth
@@ -469,6 +522,8 @@ class DecisionTreeTemplate(base.BaseEstimator):
         self.threshold_method = threshold_method
         self.threshold_quantile = threshold_quantile
         self.n_thresholds = n_thresholds
+        self.column_method = column_method
+        self.n_columns_to_try = n_columns_to_try
 
     def _organize_growth_parameters(self):
         self.growth_params_ = utils.TreeGrowthParameters(
@@ -483,6 +538,10 @@ class DecisionTreeTemplate(base.BaseEstimator):
                 quantile=self.threshold_quantile,
                 n_thresholds=self.n_thresholds,
                 random_state=int(self.random_state),
+            ),
+            column_params=utils.ColumnSelectionParameters(
+                method=self.column_method,
+                n_trials=self.n_columns_to_try,
             ),
         )
 
@@ -566,6 +625,7 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
             _y,
             measure_name=self.measure_name,
             growth_params=self.growth_params_,
+            random_state=self.random_state,
             **kwargs,
         )
 
@@ -629,6 +689,7 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
             _y,
             measure_name=self.measure_name,
             growth_params=self.growth_params_,
+            random_state=self.random_state,
         )
 
         return self
