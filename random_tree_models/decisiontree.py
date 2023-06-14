@@ -1,8 +1,5 @@
 import typing as T
 import uuid
-from enum import Enum
-from functools import partial
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -18,7 +15,7 @@ from pydantic import (
 from pydantic.dataclasses import dataclass
 from rich import print as rprint
 from rich.tree import Tree
-from sklearn.utils.multiclass import check_classification_targets, unique_labels
+from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 
 import random_tree_models.leafweights as leafweights
@@ -100,33 +97,36 @@ def select_thresholds(
 ) -> np.ndarray:
     "Selects thresholds to use for splitting"
 
-    threshold_params = growth_params.threshold_params
+    # threshold_params = growth_params.threshold_params
+    method = growth_params.threshold_params.method
+    n_thresholds = growth_params.threshold_params.n_thresholds
+    quantile = growth_params.threshold_params.quantile
 
-    if threshold_params.method == utils.ThresholdSelectionMethod.bruteforce:
+    if method == utils.ThresholdSelectionMethod.bruteforce:
         return feature_values[1:]
-    elif threshold_params.method == utils.ThresholdSelectionMethod.random:
-        if len(feature_values) - 1 <= threshold_params.n_thresholds:
+    elif method == utils.ThresholdSelectionMethod.random:
+        if len(feature_values) - 1 <= n_thresholds:
             return feature_values[1:]
         else:
             return rng.choice(
                 feature_values[1:],
-                size=threshold_params.n_thresholds,
+                size=(n_thresholds,),
                 replace=False,
             )
-    elif threshold_params.method == utils.ThresholdSelectionMethod.quantile:
-        dq = int(1 / threshold_params.quantile) + 1
+    elif method == utils.ThresholdSelectionMethod.quantile:
+        dq = int(1 / quantile) + 1
         qs = np.linspace(0, 1, dq)
         return np.quantile(feature_values[1:], qs)
-    elif threshold_params.method == utils.ThresholdSelectionMethod.uniform:
+    elif method == utils.ThresholdSelectionMethod.uniform:
         x = np.linspace(
             feature_values.min(),
             feature_values.max(),
-            threshold_params.n_thresholds + 2,
+            n_thresholds + 2,
         )
         return rng.choice(x[1:], size=[1])
     else:
         raise NotImplementedError(
-            f"Unknown threshold selection method: {threshold_params.method}"
+            f"Unknown threshold selection method: {method}"
         )
 
 
