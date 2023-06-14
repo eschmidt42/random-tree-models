@@ -97,7 +97,6 @@ def select_thresholds(
 ) -> np.ndarray:
     "Selects thresholds to use for splitting"
 
-    # threshold_params = growth_params.threshold_params
     method = growth_params.threshold_params.method
     n_thresholds = growth_params.threshold_params.n_thresholds
     quantile = growth_params.threshold_params.quantile
@@ -184,25 +183,21 @@ def get_column(
     elif method == utils.ColumnSelectionMethod.random:
         columns = np.array(columns)
         rng.shuffle(columns)
-        columns = list(columns)
     elif method == utils.ColumnSelectionMethod.largest_delta:
         deltas = X.max(axis=0) - X.min(axis=0)
         weights = deltas / deltas.sum()
-        # order = np.argsort(deltas)[::-1] # largest deltas first
         columns = np.array(columns)
-        # sorted_columns = columns[order]
-        # columns = list(sorted_columns)
         columns = rng.choice(
             columns, p=weights, size=len(columns), replace=False
         )
-        columns = list(columns)
     else:
         raise NotImplementedError(
             f"Unknown column selection method: {growth_params.column_method}"
         )
     if n_columns_to_try is not None:
         columns = columns[:n_columns_to_try]
-    return columns
+
+    return list(columns)
 
 
 def find_best_split(
