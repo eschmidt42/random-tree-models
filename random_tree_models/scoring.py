@@ -205,6 +205,15 @@ def calc_xgboost_split_score(
     return score
 
 
+class IncrementingScore:
+    score = 0
+
+    def __call__(self, *args, **kwargs) -> float:
+        """Calculates the random cut score of a split"""
+        self.score += 1
+        return self.score
+
+
 class SplitScoreMetrics(Enum):
     # https://stackoverflow.com/questions/40338652/how-to-define-enum-values-that-are-functions
     variance = partial(calc_variance)
@@ -216,6 +225,7 @@ class SplitScoreMetrics(Enum):
     # step 4 minimize the squared error between actual and predicted dloss/dyhat
     friedman_binary_classification = partial(calc_variance)
     xgboost = partial(calc_xgboost_split_score)
+    incrementing = partial(IncrementingScore())
 
     def __call__(
         self,

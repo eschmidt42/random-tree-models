@@ -63,6 +63,7 @@ class IsolationTree(dtree.DecisionTreeTemplate, base.OutlierMixin):
             _y,
             measure_name=self.measure_name,
             growth_params=self.growth_params_,
+            random_state=self.random_state,
             **kwargs,
         )
 
@@ -93,13 +94,15 @@ class IsolationForest(base.BaseEstimator, base.OutlierMixin):
     def __init__(
         self,
         n_trees: int = 3,
-        measure_name: str = "variance",
+        measure_name: str = "incrementing",
         max_depth: int = 2,
         force_all_finite: bool = True,
         frac_subsamples: float = 2 / 3,
         frac_features: float = 1.0,
         threshold_method: str = "random",
         n_thresholds: int = 1,
+        column_method: str = "random",
+        n_columns_to_try: int = 1,
         random_state: int = 42,
     ) -> None:
         self.n_trees = n_trees
@@ -111,6 +114,8 @@ class IsolationForest(base.BaseEstimator, base.OutlierMixin):
         self.frac_features = frac_features
         self.threshold_method = threshold_method
         self.n_thresholds = n_thresholds
+        self.column_method = column_method
+        self.n_columns_to_try = n_columns_to_try
         self.random_state = random_state
 
     def fit(self, X: np.ndarray, y=None) -> "IsolationForest":
@@ -132,6 +137,8 @@ class IsolationForest(base.BaseEstimator, base.OutlierMixin):
                 frac_features=self.frac_features,
                 threshold_method=self.threshold_method,
                 n_thresholds=self.n_thresholds,
+                column_method=self.column_method,
+                n_columns_to_try=self.n_columns_to_try,
                 random_state=rng.randint(0, 2**32 - 1),
             )
             new_tree.fit(X)
