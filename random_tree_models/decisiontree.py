@@ -89,17 +89,16 @@ class BestSplit:
     default_is_left: StrictBool = None
 
 
-# TODO: add tests
 def select_thresholds(
     feature_values: np.ndarray,
-    growth_params: utils.TreeGrowthParameters,
+    threshold_params: utils.ThresholdSelectionParameters,
     rng: np.random.RandomState,
 ) -> np.ndarray:
     "Selects thresholds to use for splitting"
 
-    method = growth_params.threshold_params.method
-    n_thresholds = growth_params.threshold_params.n_thresholds
-    num_quantile_steps = growth_params.threshold_params.num_quantile_steps
+    method = threshold_params.method
+    n_thresholds = threshold_params.n_thresholds
+    num_quantile_steps = threshold_params.num_quantile_steps
 
     if method == utils.ThresholdSelectionMethod.bruteforce:
         return feature_values[1:]
@@ -128,7 +127,7 @@ def select_thresholds(
         )
 
 
-# TODO: add unit test
+# TODO: add test for get_thresholds_and_target_groups
 def get_thresholds_and_target_groups(
     feature_values: np.ndarray,
     growth_params: utils.TreeGrowthParameters,
@@ -141,7 +140,9 @@ def get_thresholds_and_target_groups(
 
     if all_finite:
         default_direction_is_left = None
-        thresholds = select_thresholds(feature_values, growth_params, rng)
+        thresholds = select_thresholds(
+            feature_values, growth_params.threshold_params, rng
+        )
 
         for threshold in thresholds:
             target_groups = feature_values < threshold
@@ -149,7 +150,7 @@ def get_thresholds_and_target_groups(
     else:
         finite_feature_values = feature_values[is_finite]
         thresholds = select_thresholds(
-            finite_feature_values, growth_params, rng
+            finite_feature_values, growth_params.threshold_params, rng
         )
 
         for threshold in thresholds:
@@ -166,7 +167,7 @@ def get_thresholds_and_target_groups(
             yield (threshold, target_groups, False)
 
 
-# TODO: add tests
+# TODO: add test for get_column
 def get_column(
     X: np.ndarray,
     growth_params: utils.TreeGrowthParameters,
@@ -272,7 +273,7 @@ def check_if_split_sensible(
     return is_not_sensible, gain
 
 
-# TODO: add unit test
+# TODO: add test calc_leaf_weight_and_split_score
 def calc_leaf_weight_and_split_score(
     y: np.ndarray,
     measure_name: str,
@@ -297,7 +298,7 @@ def calc_leaf_weight_and_split_score(
     return leaf_weight, score
 
 
-# TODO: add unit test
+# TODO: add test for select_arrays_for_child_node
 def select_arrays_for_child_node(
     go_left: bool,
     best: BestSplit,
@@ -539,7 +540,7 @@ class DecisionTreeTemplate(base.BaseEstimator):
             ),
         )
 
-    # TODO: add tests
+    # TODO: add test for _select_samples_and_features
     def _select_samples_and_features(
         self, X: np.ndarray, y: np.ndarray
     ) -> T.Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -570,7 +571,7 @@ class DecisionTreeTemplate(base.BaseEstimator):
         _y = y[ix_samples]
         return _X, _y, ix_features
 
-    # TODO: add tests
+    # TODO: add test for _select_features
     def _select_features(
         self, X: np.ndarray, ix_features: np.ndarray
     ) -> np.ndarray:

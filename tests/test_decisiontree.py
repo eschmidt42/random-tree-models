@@ -222,6 +222,111 @@ def test_BestSplit(score, column, threshold, target_groups, default_is_left):
         assert hasattr(best, "default_is_left")
 
 
+class Test_select_thresholds:
+    """
+    bruteforce: returns all possible thresholds from the 2nd onward
+    random:
+    * returns a random subset of the thresholds if n_thresholds smaller than avaliable values
+    * is reproducible with random_state
+    quantile: returns num_quantile_steps thresholds which are ordered
+    uniform: returns single value between min and max
+    """
+
+    def test_bruteforce(self):
+        params = utils.ThresholdSelectionParameters(method="bruteforce")
+        feature_values = np.linspace(-1, 1, 100)
+        rng = None
+
+        # line to test
+        thresholds = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert np.allclose(thresholds, feature_values[1:])
+
+    def test_random_when_to_few_values(self):
+        params = utils.ThresholdSelectionParameters(
+            method="random", n_thresholds=1000
+        )
+        feature_values = np.linspace(-1, 1, 100)
+        rng = None
+
+        # line to test
+        thresholds = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert np.allclose(thresholds, feature_values[1:])
+
+    def test_random_when_enough_values(self):
+        n_thresholds = 10
+        params = utils.ThresholdSelectionParameters(
+            method="random", n_thresholds=n_thresholds
+        )
+        feature_values = np.linspace(-1, 1, 100)
+        rng = np.random.RandomState(42)
+
+        # line to test
+        thresholds0 = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert thresholds0.shape == (n_thresholds,)
+        assert np.unique(thresholds0).shape == (n_thresholds,)
+
+    def test_random_reproducible(self):
+        n_thresholds = 10
+        params = utils.ThresholdSelectionParameters(
+            method="random", n_thresholds=n_thresholds
+        )
+        feature_values = np.linspace(-1, 1, 100)
+
+        # line to test
+        rng = np.random.RandomState(42)
+        thresholds0 = dtree.select_thresholds(feature_values, params, rng=rng)
+        rng = np.random.RandomState(42)
+        thresholds1 = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert np.allclose(thresholds0, thresholds1)
+
+    def test_random_produces_changing_thresholds(self):
+        n_thresholds = 10
+        params = utils.ThresholdSelectionParameters(
+            method="random", n_thresholds=n_thresholds
+        )
+        feature_values = np.linspace(-1, 1, 100)
+        rng = np.random.RandomState(42)
+
+        # line to test
+        thresholds0 = dtree.select_thresholds(feature_values, params, rng=rng)
+        thresholds1 = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert not np.allclose(thresholds0, thresholds1)
+
+    def test_quantile(self):
+        n_thresholds = 10
+        params = utils.ThresholdSelectionParameters(
+            method="quantile", n_thresholds=n_thresholds, quantile=0.1
+        )
+        feature_values = np.linspace(-1, 1, 100)
+        rng = np.random.RandomState(42)
+
+        # line to test
+        thresholds = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert thresholds.shape == (11,)
+        assert (thresholds[1:] > thresholds[:-1]).all()
+
+    def test_uniform(self):
+        n_thresholds = 10
+        params = utils.ThresholdSelectionParameters(
+            method="uniform", n_thresholds=n_thresholds
+        )
+        rng = np.random.RandomState(42)
+        feature_values = rng.normal(loc=0, scale=1, size=100)
+
+        # line to test
+        thresholds = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert thresholds.shape == (1,)
+        assert thresholds[0] >= feature_values.min()
+        assert thresholds[0] <= feature_values.max()
+
+
 class Test_find_best_split:
     """
     cases to test for all measure_name values:
