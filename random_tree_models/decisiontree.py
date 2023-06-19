@@ -269,7 +269,6 @@ def check_if_split_sensible(
     return is_not_sensible, gain
 
 
-# TODO: add test calc_leaf_weight_and_split_score
 def calc_leaf_weight_and_split_score(
     y: np.ndarray,
     measure_name: str,

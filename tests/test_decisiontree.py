@@ -839,7 +839,7 @@ class Test_find_best_split:
         ),
     ],
 )
-def test_check_if_gain_insufficient(
+def test_check_if_split_sensible(
     best: dtree.BestSplit,
     parent_node: dtree.Node,
     growth_params: utils.TreeGrowthParameters,
@@ -853,6 +853,37 @@ def test_check_if_gain_insufficient(
     assert is_not_sensible_split == is_no_sensible_split_exp
     if parent_node is None or parent_node.measure.value is None:
         assert gain is None
+
+
+def test_calc_leaf_weight_and_split_score():
+    # calls leafweights.calc_leaf_weight and scoreing.SplitScoreMetrics
+    # and returns two floats
+    y = np.array([True, True, False])
+    measure_name = "gini"
+    growth_params = utils.TreeGrowthParameters(max_depth=2)
+    g = np.array([1, 2, 3])
+    h = np.array([4, 5, 6])
+    leaf_weight_exp = 1.0
+    score_exp = 42.0
+    with (
+        patch(
+            "random_tree_models.decisiontree.leafweights.calc_leaf_weight",
+            return_value=leaf_weight_exp,
+        ) as mock_calc_leaf_weight,
+        patch(
+            "random_tree_models.decisiontree.scoring.SplitScoreMetrics.__call__",
+            return_value=score_exp,
+        ) as mock_SplitScoreMetrics,
+    ):
+        # line to test
+        leaf_weight, split_score = dtree.calc_leaf_weight_and_split_score(
+            y, measure_name, growth_params, g, h
+        )
+
+    assert leaf_weight == leaf_weight_exp
+    assert split_score == score_exp
+    assert mock_calc_leaf_weight.call_count == 1
+    assert mock_SplitScoreMetrics.call_count == 1
 
 
 class Test_grow_tree:
