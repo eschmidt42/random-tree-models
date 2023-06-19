@@ -1145,6 +1145,8 @@ def test_predict_with_tree():
 
 class TestDecisionTreeTemplate:
     model = dtree.DecisionTreeTemplate()
+    X = np.random.normal(size=(100, 10))
+    y = np.random.normal(size=(100,))
 
     def test_tree_(self):
         assert not hasattr(self.model, "tree_")
@@ -1166,6 +1168,105 @@ class TestDecisionTreeTemplate:
             self.model.predict(None)
         except NotImplementedError as ex:
             pytest.xfail("DecisionTreeTemplate.predict expectedly refused call")
+
+    def test_select_samples_and_features_no_sampling(self):
+        self.model.frac_features = 1.0
+        self.model.frac_samples = 1.0
+        self.model._organize_growth_parameters()
+
+        # line to test
+        X, y, ix_features = self.model._select_samples_and_features(
+            self.X, self.y
+        )
+
+        assert np.allclose(X, self.X)
+        assert np.allclose(y, self.y)
+        assert np.allclose(ix_features, np.arange(0, self.X.shape[1], 1))
+
+    def test_select_samples_and_features_with_column_sampling(self):
+        self.model.frac_features = 0.5
+        self.model.frac_samples = 1.0
+        self.model._organize_growth_parameters()
+
+        # line to test
+        X, y, ix_features = self.model._select_samples_and_features(
+            self.X, self.y
+        )
+
+        assert np.isclose(
+            X.shape[1], self.X.shape[1] * self.model.frac_features, atol=1
+        )
+        assert np.isclose(y.shape[0], self.y.shape[0])
+        assert all(
+            [ix in np.arange(0, self.X.shape[1], 1) for ix in ix_features]
+        )
+
+    def test_select_samples_and_features_with_row_sampling(self):
+        self.model.frac_features = 1.0
+        self.model.frac_samples = 0.5
+        self.model._organize_growth_parameters()
+
+        # line to test
+        X, y, ix_features = self.model._select_samples_and_features(
+            self.X, self.y
+        )
+
+        assert np.isclose(
+            X.shape[0], self.X.shape[0] * self.model.frac_subsamples
+        )
+        assert np.isclose(
+            y.shape[0], self.y.shape[0] * self.model.frac_subsamples
+        )
+        assert np.allclose(ix_features, np.arange(0, self.X.shape[1], 1))
+
+    def test_select_samples_and_features_with_column_and_row_sampling(self):
+        self.model.frac_features = 0.5
+        self.model.frac_samples = 0.5
+        self.model._organize_growth_parameters()
+
+        # line to test
+        X, y, ix_features = self.model._select_samples_and_features(
+            self.X, self.y
+        )
+
+        assert np.isclose(
+            X.shape[1], self.X.shape[1] * self.model.frac_features, atol=1
+        )
+        assert np.isclose(
+            X.shape[0], self.X.shape[0] * self.model.frac_subsamples
+        )
+        assert np.isclose(
+            y.shape[0], self.y.shape[0] * self.model.frac_subsamples
+        )
+        assert all(
+            [ix in np.arange(0, self.X.shape[1], 1) for ix in ix_features]
+        )
+
+    def test_select_samples_and_features_sampling_reproducibility(self):
+        self.model.frac_features = 0.5
+        self.model.frac_samples = 0.5
+        self.model._organize_growth_parameters()
+
+        # line to test
+        X0, y0, ix_features0 = self.model._select_samples_and_features(
+            self.X, self.y
+        )
+        X1, y1, ix_features1 = self.model._select_samples_and_features(
+            self.X, self.y
+        )
+
+        assert np.allclose(X0, X1)
+        assert np.allclose(y0, y1)
+        assert np.allclose(ix_features0, ix_features1)
+
+    def test_select_features(self):
+        ix_features = np.arange(0, self.X.shape[1], 1)
+        _X = self.model._select_features(self.X, ix_features)
+        assert np.allclose(_X, self.X)
+
+        ix_features = np.array([0, 1, 2])
+        _X = self.model._select_features(self.X, ix_features)
+        assert _X.shape[1] == 3
 
 
 class TestDecisionTreeRegressor:

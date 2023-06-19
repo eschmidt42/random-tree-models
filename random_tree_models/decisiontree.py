@@ -534,10 +534,10 @@ class DecisionTreeTemplate(base.BaseEstimator):
             ),
         )
 
-    # TODO: add test for _select_samples_and_features
     def _select_samples_and_features(
         self, X: np.ndarray, y: np.ndarray
     ) -> T.Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        "Sub-samples rows and columns from X and y"
         if not hasattr(self, "growth_params_"):
             raise ValueError(f"Try calling `fit` first.")
 
@@ -565,7 +565,6 @@ class DecisionTreeTemplate(base.BaseEstimator):
         _y = y[ix_samples]
         return _X, _y, ix_features
 
-    # TODO: add test for _select_features
     def _select_features(
         self, X: np.ndarray, ix_features: np.ndarray
     ) -> np.ndarray:
