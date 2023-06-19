@@ -1,8 +1,10 @@
+import types
 from unittest.mock import patch
 
 import numpy as np
 import pytest
 from pydantic import ValidationError
+from scipy import stats
 from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.decisiontree as dtree
@@ -155,7 +157,7 @@ def test_check_is_baselevel(y, depths):
 
     # line to test
     is_baselevel, msg = dtree.check_is_baselevel(
-        y, node, depth=depth, max_depth=max_depth
+        y, depth=depth, max_depth=max_depth
     )
 
     assert is_baselevel == is_baselevel_exp
@@ -220,6 +222,271 @@ def test_BestSplit(score, column, threshold, target_groups, default_is_left):
         assert hasattr(best, "threshold")
         assert hasattr(best, "target_groups")
         assert hasattr(best, "default_is_left")
+
+
+class Test_select_thresholds:
+    """
+    bruteforce: returns all possible thresholds from the 2nd onward
+    random:
+    * returns a random subset of the thresholds if n_thresholds smaller than avaliable values
+    * is reproducible with random_state
+    quantile: returns num_quantile_steps thresholds which are ordered
+    uniform: returns single value between min and max
+    """
+
+    def test_bruteforce(self):
+        params = utils.ThresholdSelectionParameters(method="bruteforce")
+        feature_values = np.linspace(-1, 1, 100)
+        rng = None
+
+        # line to test
+        thresholds = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert np.allclose(thresholds, feature_values[1:])
+
+    def test_random_when_to_few_values(self):
+        params = utils.ThresholdSelectionParameters(
+            method="random", n_thresholds=1000
+        )
+        feature_values = np.linspace(-1, 1, 100)
+        rng = None
+
+        # line to test
+        thresholds = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert np.allclose(thresholds, feature_values[1:])
+
+    def test_random_when_enough_values(self):
+        n_thresholds = 10
+        params = utils.ThresholdSelectionParameters(
+            method="random", n_thresholds=n_thresholds
+        )
+        feature_values = np.linspace(-1, 1, 100)
+        rng = np.random.RandomState(42)
+
+        # line to test
+        thresholds0 = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert thresholds0.shape == (n_thresholds,)
+        assert np.unique(thresholds0).shape == (n_thresholds,)
+
+    def test_random_reproducible(self):
+        n_thresholds = 10
+        params = utils.ThresholdSelectionParameters(
+            method="random", n_thresholds=n_thresholds
+        )
+        feature_values = np.linspace(-1, 1, 100)
+
+        # line to test
+        rng = np.random.RandomState(42)
+        thresholds0 = dtree.select_thresholds(feature_values, params, rng=rng)
+        rng = np.random.RandomState(42)
+        thresholds1 = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert np.allclose(thresholds0, thresholds1)
+
+    def test_random_produces_changing_thresholds(self):
+        n_thresholds = 10
+        params = utils.ThresholdSelectionParameters(
+            method="random", n_thresholds=n_thresholds
+        )
+        feature_values = np.linspace(-1, 1, 100)
+        rng = np.random.RandomState(42)
+
+        # line to test
+        thresholds0 = dtree.select_thresholds(feature_values, params, rng=rng)
+        thresholds1 = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert not np.allclose(thresholds0, thresholds1)
+
+    def test_quantile(self):
+        n_thresholds = 10
+        params = utils.ThresholdSelectionParameters(
+            method="quantile", n_thresholds=n_thresholds, quantile=0.1
+        )
+        feature_values = np.linspace(-1, 1, 100)
+        rng = np.random.RandomState(42)
+
+        # line to test
+        thresholds = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert thresholds.shape == (11,)
+        assert (thresholds[1:] > thresholds[:-1]).all()
+
+    def test_uniform(self):
+        n_thresholds = 10
+        params = utils.ThresholdSelectionParameters(
+            method="uniform", n_thresholds=n_thresholds
+        )
+        rng = np.random.RandomState(42)
+        feature_values = rng.normal(loc=0, scale=1, size=100)
+
+        # line to test
+        thresholds = dtree.select_thresholds(feature_values, params, rng=rng)
+
+        assert thresholds.shape == (1,)
+        assert thresholds[0] >= feature_values.min()
+        assert thresholds[0] <= feature_values.max()
+
+
+class Test_get_thresholds_and_target_groups:
+    """
+    * preduces a generator
+    * produces twice as many items to iterate in the case of missing values
+    * each item contains the current threshold, the target groups and a boolean that indicates the default direction
+    * the default direction is always None if there are no missing values and otherwise boolean
+    """
+
+    def test_produces_generator(self):
+        feature_values = np.linspace(-1, 1, 10)
+        threshold_params = utils.ThresholdSelectionParameters(
+            method="bruteforce"
+        )
+        rng = np.random.RandomState(42)
+
+        # line to test
+        gen = dtree.get_thresholds_and_target_groups(
+            feature_values, threshold_params, rng=rng
+        )
+
+        assert isinstance(gen, types.GeneratorType)
+
+    def test_finite_only_case(self):
+        feature_values = np.linspace(-1, 1, 10)
+        threshold_params = utils.ThresholdSelectionParameters(
+            method="bruteforce"
+        )
+        rng = np.random.RandomState(42)
+
+        # line to test
+        for i, (
+            threshold,
+            target_groups,
+            default_direction_is_left,
+        ) in enumerate(
+            dtree.get_thresholds_and_target_groups(
+                feature_values, threshold_params, rng=rng
+            )
+        ):
+            assert isinstance(target_groups, np.ndarray)
+            assert threshold in feature_values[1:]
+            assert target_groups.dtype == bool
+            assert default_direction_is_left is None
+
+        assert i == len(feature_values[1:]) - 1
+
+    def test_with_missing_case(self):
+        feature_values = np.linspace(-1, 1, 10)
+        feature_values[5] = np.nan
+        threshold_params = utils.ThresholdSelectionParameters(
+            method="bruteforce"
+        )
+        rng = np.random.RandomState(42)
+
+        # line to test
+        for i, (
+            threshold,
+            target_groups,
+            default_direction_is_left,
+        ) in enumerate(
+            dtree.get_thresholds_and_target_groups(
+                feature_values, threshold_params, rng=rng
+            )
+        ):
+            assert isinstance(target_groups, np.ndarray)
+            assert threshold in feature_values[1:]
+            assert target_groups.dtype == bool
+            assert default_direction_is_left in [True, False]
+
+        assert i == 2 * (len(feature_values[1:]) - 1) - 1
+
+
+class Test_get_column:
+    """
+    * method ascending just returns ascending integer list for columns
+    * method random returns random integer list for columns
+    * method largest_delta returns column indices with largest feature max-min differences first
+    * if n_columns_to_try is given it is used to shorted the returned list
+    """
+
+    def test_ascending(self):
+        n_columns = 10
+        n_trials = None
+        column_params = utils.ColumnSelectionParameters(
+            method="ascending", n_trials=n_trials
+        )
+        X = np.random.normal(size=(100, n_columns))
+        rng = np.random.RandomState(42)
+
+        # line to test
+        columns = dtree.get_column(X, column_params, rng=rng)
+
+        assert columns == list(range(n_columns))
+
+    def test_ascending_first_n_trials_columns(self):
+        n_columns = 10
+        n_trials = 5
+        column_params = utils.ColumnSelectionParameters(
+            method="ascending", n_trials=n_trials
+        )
+        X = np.random.normal(size=(100, n_columns))
+        rng = np.random.RandomState(42)
+
+        # line to test
+        columns = dtree.get_column(X, column_params, rng=rng)
+
+        assert columns == list(range(n_trials))
+
+    def test_random(self):
+        n_columns = 10
+        n_trials = None
+        column_params = utils.ColumnSelectionParameters(
+            method="random", n_trials=n_trials
+        )
+        X = np.random.normal(size=(100, n_columns))
+        rng = np.random.RandomState(42)
+
+        # line to test
+        columns = dtree.get_column(X, column_params, rng=rng)
+
+        assert not all([i0 < i1 for i0, i1 in zip(columns[:-1], columns[1:])])
+        assert sorted(columns) == list(range(n_columns))
+
+    def test_random_is_reproducible(self):
+        n_columns = 10
+        n_trials = None
+        column_params = utils.ColumnSelectionParameters(
+            method="random", n_trials=n_trials
+        )
+        X = np.random.normal(size=(100, n_columns))
+
+        # line to test
+        rng = np.random.RandomState(42)
+        columns0 = dtree.get_column(X, column_params, rng=rng)
+        rng = np.random.RandomState(42)
+        columns1 = dtree.get_column(X, column_params, rng=rng)
+
+        assert columns0 == columns1
+
+    def test_largest_delta(self):
+        n_columns = 5
+        n_trials = None
+        column_params = utils.ColumnSelectionParameters(
+            method="largest_delta", n_trials=n_trials
+        )
+        rng = np.random.RandomState(42)
+        X = np.array([[0, 0.001], [0, 0.01], [0, 0.1], [0, 1.0], [0, 10.0]]).T
+
+        n_repetitions = 100
+        all_columns = np.zeros((n_repetitions, n_columns), dtype=int)
+
+        for i in range(n_repetitions):
+            # line to test
+            all_columns[i, :] = dtree.get_column(X, column_params, rng=rng)
+
+        assert np.allclose(
+            stats.mode(all_columns, axis=0).mode, [4, 3, 2, 1, 0]
+        )
 
 
 class Test_find_best_split:
@@ -572,7 +839,7 @@ class Test_find_best_split:
         ),
     ],
 )
-def test_check_if_gain_insufficient(
+def test_check_if_split_sensible(
     best: dtree.BestSplit,
     parent_node: dtree.Node,
     growth_params: utils.TreeGrowthParameters,
@@ -586,6 +853,72 @@ def test_check_if_gain_insufficient(
     assert is_not_sensible_split == is_no_sensible_split_exp
     if parent_node is None or parent_node.measure.value is None:
         assert gain is None
+
+
+def test_calc_leaf_weight_and_split_score():
+    # calls leafweights.calc_leaf_weight and scoreing.SplitScoreMetrics
+    # and returns two floats
+    y = np.array([True, True, False])
+    measure_name = "gini"
+    growth_params = utils.TreeGrowthParameters(max_depth=2)
+    g = np.array([1, 2, 3])
+    h = np.array([4, 5, 6])
+    leaf_weight_exp = 1.0
+    score_exp = 42.0
+    with (
+        patch(
+            "random_tree_models.decisiontree.leafweights.calc_leaf_weight",
+            return_value=leaf_weight_exp,
+        ) as mock_calc_leaf_weight,
+        patch(
+            "random_tree_models.decisiontree.scoring.SplitScoreMetrics.__call__",
+            return_value=score_exp,
+        ) as mock_SplitScoreMetrics,
+    ):
+        # line to test
+        leaf_weight, split_score = dtree.calc_leaf_weight_and_split_score(
+            y, measure_name, growth_params, g, h
+        )
+
+    assert leaf_weight == leaf_weight_exp
+    assert split_score == score_exp
+    assert mock_calc_leaf_weight.call_count == 1
+    assert mock_SplitScoreMetrics.call_count == 1
+
+
+@pytest.mark.parametrize("go_left", [True, False])
+def test_select_arrays_for_child_node(go_left: bool):
+    best = dtree.BestSplit(
+        score=1.0,
+        column=0,
+        threshold=2.0,
+        target_groups=np.array([True, True, False]),
+    )
+
+    X = np.array([[1], [2], [3]])
+    y = np.array([True, True, False])
+    g = np.array([1, 2, 3])
+    h = np.array([4, 5, 6])
+
+    # line to test
+    _X, _y, _g, _h = dtree.select_arrays_for_child_node(
+        go_left=go_left,
+        best=best,
+        X=X,
+        y=y,
+        g=g,
+        h=h,
+    )
+    if go_left:
+        assert np.allclose(_X, X[:2])
+        assert np.allclose(_y, y[:2])
+        assert np.allclose(_g, g[:2])
+        assert np.allclose(_h, h[:2])
+    else:
+        assert np.allclose(_X, X[2:])
+        assert np.allclose(_y, y[2:])
+        assert np.allclose(_g, g[2:])
+        assert np.allclose(_h, h[2:])
 
 
 class Test_grow_tree:
@@ -812,6 +1145,8 @@ def test_predict_with_tree():
 
 class TestDecisionTreeTemplate:
     model = dtree.DecisionTreeTemplate()
+    X = np.random.normal(size=(100, 10))
+    y = np.random.normal(size=(100,))
 
     def test_tree_(self):
         assert not hasattr(self.model, "tree_")
@@ -833,6 +1168,105 @@ class TestDecisionTreeTemplate:
             self.model.predict(None)
         except NotImplementedError as ex:
             pytest.xfail("DecisionTreeTemplate.predict expectedly refused call")
+
+    def test_select_samples_and_features_no_sampling(self):
+        self.model.frac_features = 1.0
+        self.model.frac_samples = 1.0
+        self.model._organize_growth_parameters()
+
+        # line to test
+        X, y, ix_features = self.model._select_samples_and_features(
+            self.X, self.y
+        )
+
+        assert np.allclose(X, self.X)
+        assert np.allclose(y, self.y)
+        assert np.allclose(ix_features, np.arange(0, self.X.shape[1], 1))
+
+    def test_select_samples_and_features_with_column_sampling(self):
+        self.model.frac_features = 0.5
+        self.model.frac_samples = 1.0
+        self.model._organize_growth_parameters()
+
+        # line to test
+        X, y, ix_features = self.model._select_samples_and_features(
+            self.X, self.y
+        )
+
+        assert np.isclose(
+            X.shape[1], self.X.shape[1] * self.model.frac_features, atol=1
+        )
+        assert np.isclose(y.shape[0], self.y.shape[0])
+        assert all(
+            [ix in np.arange(0, self.X.shape[1], 1) for ix in ix_features]
+        )
+
+    def test_select_samples_and_features_with_row_sampling(self):
+        self.model.frac_features = 1.0
+        self.model.frac_samples = 0.5
+        self.model._organize_growth_parameters()
+
+        # line to test
+        X, y, ix_features = self.model._select_samples_and_features(
+            self.X, self.y
+        )
+
+        assert np.isclose(
+            X.shape[0], self.X.shape[0] * self.model.frac_subsamples
+        )
+        assert np.isclose(
+            y.shape[0], self.y.shape[0] * self.model.frac_subsamples
+        )
+        assert np.allclose(ix_features, np.arange(0, self.X.shape[1], 1))
+
+    def test_select_samples_and_features_with_column_and_row_sampling(self):
+        self.model.frac_features = 0.5
+        self.model.frac_samples = 0.5
+        self.model._organize_growth_parameters()
+
+        # line to test
+        X, y, ix_features = self.model._select_samples_and_features(
+            self.X, self.y
+        )
+
+        assert np.isclose(
+            X.shape[1], self.X.shape[1] * self.model.frac_features, atol=1
+        )
+        assert np.isclose(
+            X.shape[0], self.X.shape[0] * self.model.frac_subsamples
+        )
+        assert np.isclose(
+            y.shape[0], self.y.shape[0] * self.model.frac_subsamples
+        )
+        assert all(
+            [ix in np.arange(0, self.X.shape[1], 1) for ix in ix_features]
+        )
+
+    def test_select_samples_and_features_sampling_reproducibility(self):
+        self.model.frac_features = 0.5
+        self.model.frac_samples = 0.5
+        self.model._organize_growth_parameters()
+
+        # line to test
+        X0, y0, ix_features0 = self.model._select_samples_and_features(
+            self.X, self.y
+        )
+        X1, y1, ix_features1 = self.model._select_samples_and_features(
+            self.X, self.y
+        )
+
+        assert np.allclose(X0, X1)
+        assert np.allclose(y0, y1)
+        assert np.allclose(ix_features0, ix_features1)
+
+    def test_select_features(self):
+        ix_features = np.arange(0, self.X.shape[1], 1)
+        _X = self.model._select_features(self.X, ix_features)
+        assert np.allclose(_X, self.X)
+
+        ix_features = np.array([0, 1, 2])
+        _X = self.model._select_features(self.X, ix_features)
+        assert _X.shape[1] == 3
 
 
 class TestDecisionTreeRegressor:

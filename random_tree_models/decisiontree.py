@@ -1,8 +1,5 @@
 import typing as T
 import uuid
-from enum import Enum
-from functools import partial
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -18,7 +15,7 @@ from pydantic import (
 from pydantic.dataclasses import dataclass
 from rich import print as rprint
 from rich.tree import Tree
-from sklearn.utils.multiclass import check_classification_targets, unique_labels
+from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 
 import random_tree_models.leafweights as leafweights
@@ -66,7 +63,7 @@ class Node:
 
 
 def check_is_baselevel(
-    y: np.ndarray, node: Node, depth: int, max_depth: int
+    y: np.ndarray, depth: int, max_depth: int
 ) -> T.Tuple[bool, str]:
     """Verifies if the tree traversal reached the baselevel / a leaf
     * group homogeneous / cannot sensibly be splitted further
@@ -92,48 +89,47 @@ class BestSplit:
     default_is_left: StrictBool = None
 
 
-# TODO: add tests
 def select_thresholds(
     feature_values: np.ndarray,
-    growth_params: utils.TreeGrowthParameters,
+    threshold_params: utils.ThresholdSelectionParameters,
     rng: np.random.RandomState,
 ) -> np.ndarray:
     "Selects thresholds to use for splitting"
 
-    threshold_params = growth_params.threshold_params
+    method = threshold_params.method
+    n_thresholds = threshold_params.n_thresholds
+    num_quantile_steps = threshold_params.num_quantile_steps
 
-    if threshold_params.method == utils.ThresholdSelectionMethod.bruteforce:
+    if method == utils.ThresholdSelectionMethod.bruteforce:
         return feature_values[1:]
-    elif threshold_params.method == utils.ThresholdSelectionMethod.random:
-        if len(feature_values) - 1 <= threshold_params.n_thresholds:
+    elif method == utils.ThresholdSelectionMethod.random:
+        if len(feature_values) - 1 <= n_thresholds:
             return feature_values[1:]
         else:
             return rng.choice(
                 feature_values[1:],
-                size=threshold_params.n_thresholds,
+                size=(n_thresholds,),
                 replace=False,
             )
-    elif threshold_params.method == utils.ThresholdSelectionMethod.quantile:
-        dq = int(1 / threshold_params.quantile) + 1
-        qs = np.linspace(0, 1, dq)
+    elif method == utils.ThresholdSelectionMethod.quantile:
+        qs = np.linspace(0, 1, num_quantile_steps)
         return np.quantile(feature_values[1:], qs)
-    elif threshold_params.method == utils.ThresholdSelectionMethod.uniform:
+    elif method == utils.ThresholdSelectionMethod.uniform:
         x = np.linspace(
             feature_values.min(),
             feature_values.max(),
-            threshold_params.n_thresholds + 2,
+            n_thresholds + 2,
         )
         return rng.choice(x[1:], size=[1])
     else:
         raise NotImplementedError(
-            f"Unknown threshold selection method: {threshold_params.method}"
+            f"Unknown threshold selection method: {method}"
         )
 
 
-# TODO: add unit test
 def get_thresholds_and_target_groups(
     feature_values: np.ndarray,
-    growth_params: utils.TreeGrowthParameters,
+    threshold_params: utils.ThresholdSelectionParameters,
     rng: np.random.RandomState,
 ) -> T.Generator[T.Tuple[np.ndarray, np.ndarray, bool], None, None]:
     "Creates a generator for split finding, returning the used threshold, the target groups and a bool indicating if the default direction is left"
@@ -143,7 +139,7 @@ def get_thresholds_and_target_groups(
 
     if all_finite:
         default_direction_is_left = None
-        thresholds = select_thresholds(feature_values, growth_params, rng)
+        thresholds = select_thresholds(feature_values, threshold_params, rng)
 
         for threshold in thresholds:
             target_groups = feature_values < threshold
@@ -151,7 +147,7 @@ def get_thresholds_and_target_groups(
     else:
         finite_feature_values = feature_values[is_finite]
         thresholds = select_thresholds(
-            finite_feature_values, growth_params, rng
+            finite_feature_values, threshold_params, rng
         )
 
         for threshold in thresholds:
@@ -168,15 +164,14 @@ def get_thresholds_and_target_groups(
             yield (threshold, target_groups, False)
 
 
-# TODO: add tests
 def get_column(
     X: np.ndarray,
-    growth_params: utils.TreeGrowthParameters,
+    column_params: utils.ColumnSelectionParameters,
     rng: np.random.RandomState,
 ) -> T.List[int]:
     # select column order to split on
-    method = growth_params.column_params.method
-    n_columns_to_try = growth_params.column_params.n_trials
+    method = column_params.method
+    n_columns_to_try = column_params.n_trials
 
     columns = list(range(X.shape[1]))
     if method == utils.ColumnSelectionMethod.ascending:
@@ -184,25 +179,21 @@ def get_column(
     elif method == utils.ColumnSelectionMethod.random:
         columns = np.array(columns)
         rng.shuffle(columns)
-        columns = list(columns)
     elif method == utils.ColumnSelectionMethod.largest_delta:
         deltas = X.max(axis=0) - X.min(axis=0)
         weights = deltas / deltas.sum()
-        # order = np.argsort(deltas)[::-1] # largest deltas first
         columns = np.array(columns)
-        # sorted_columns = columns[order]
-        # columns = list(sorted_columns)
         columns = rng.choice(
             columns, p=weights, size=len(columns), replace=False
         )
-        columns = list(columns)
     else:
         raise NotImplementedError(
-            f"Unknown column selection method: {growth_params.column_method}"
+            f"Unknown column selection method: {column_params.method}"
         )
     if n_columns_to_try is not None:
         columns = columns[:n_columns_to_try]
-    return columns
+
+    return list(columns)
 
 
 def find_best_split(
@@ -224,7 +215,7 @@ def find_best_split(
 
     best = None  # this will be an BestSplit instance
 
-    for array_column in get_column(X, growth_params, rng):
+    for array_column in get_column(X, growth_params.column_params, rng):
         feature_values = X[:, array_column]
 
         for (
@@ -232,7 +223,7 @@ def find_best_split(
             target_groups,
             default_is_left,
         ) in get_thresholds_and_target_groups(
-            feature_values, growth_params, rng
+            feature_values, growth_params.threshold_params, rng
         ):
             split_score = scoring.SplitScoreMetrics[measure_name](
                 y,
@@ -278,7 +269,6 @@ def check_if_split_sensible(
     return is_not_sensible, gain
 
 
-# TODO: add unit test
 def calc_leaf_weight_and_split_score(
     y: np.ndarray,
     measure_name: str,
@@ -303,7 +293,6 @@ def calc_leaf_weight_and_split_score(
     return leaf_weight, score
 
 
-# TODO: add unit test
 def select_arrays_for_child_node(
     go_left: bool,
     best: BestSplit,
@@ -367,7 +356,7 @@ def grow_tree(
         )
 
     is_baselevel, reason = check_is_baselevel(
-        y, parent_node, depth, max_depth=growth_params.max_depth
+        y, depth, max_depth=growth_params.max_depth
     )
 
     # compute leaf weight (for prediction) and node score (for split gain check)
@@ -545,10 +534,10 @@ class DecisionTreeTemplate(base.BaseEstimator):
             ),
         )
 
-    # TODO: add tests
     def _select_samples_and_features(
         self, X: np.ndarray, y: np.ndarray
     ) -> T.Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        "Sub-samples rows and columns from X and y"
         if not hasattr(self, "growth_params_"):
             raise ValueError(f"Try calling `fit` first.")
 
@@ -576,7 +565,6 @@ class DecisionTreeTemplate(base.BaseEstimator):
         _y = y[ix_samples]
         return _X, _y, ix_features
 
-    # TODO: add tests
     def _select_features(
         self, X: np.ndarray, ix_features: np.ndarray
     ) -> np.ndarray:

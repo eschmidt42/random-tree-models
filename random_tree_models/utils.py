@@ -6,14 +6,12 @@ from pydantic.dataclasses import dataclass
 from rich.logging import RichHandler
 
 
-# TODO: add tests
 class ColumnSelectionMethod(Enum):
     ascending = "ascending"
     largest_delta = "largest_delta"
     random = "random"
 
 
-# TODO: add tests
 class ThresholdSelectionMethod(Enum):
     bruteforce = "bruteforce"
     quantile = "quantile"
@@ -21,7 +19,6 @@ class ThresholdSelectionMethod(Enum):
     uniform = "uniform"
 
 
-# TODO: add tests
 @dataclass
 class ThresholdSelectionParameters:
     method: ThresholdSelectionMethod
@@ -56,15 +53,16 @@ class ThresholdSelectionParameters:
         if not is_okay:
             raise ValueError(f"{self.n_thresholds=} not > 0")
 
+        # set dq
+        self.num_quantile_steps = int(1 / self.quantile) + 1
 
-# TODO: add tests
+
 @dataclass
 class ColumnSelectionParameters:
     method: ColumnSelectionMethod
     n_trials: StrictInt = None
 
 
-# TODO: add tests
 @dataclass
 class TreeGrowthParameters:
     max_depth: StrictInt
@@ -94,7 +92,6 @@ class TreeGrowthParameters:
             raise ValueError(f"{self.frac_features=} not in (0, 1]")
 
 
-# TODO: add tests
 def _get_logger(level=logging.INFO):
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
@@ -105,7 +102,9 @@ def _get_logger(level=logging.INFO):
         datefmt="[%X]",
         handlers=[RichHandler(rich_tracebacks=True)],
     )
-    return logging.getLogger("rich")
+    logger = logging.getLogger("rich")
+    logger.setLevel(level)
+    return logger
 
 
 logger = _get_logger()
