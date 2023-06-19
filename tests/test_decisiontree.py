@@ -4,6 +4,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 from pydantic import ValidationError
+from scipy import stats
 from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.decisiontree as dtree
@@ -398,6 +399,94 @@ class Test_get_thresholds_and_target_groups:
             assert default_direction_is_left in [True, False]
 
         assert i == 2 * (len(feature_values[1:]) - 1) - 1
+
+
+class Test_get_column:
+    """
+    * method ascending just returns ascending integer list for columns
+    * method random returns random integer list for columns
+    * method largest_delta returns column indices with largest feature max-min differences first
+    * if n_columns_to_try is given it is used to shorted the returned list
+    """
+
+    def test_ascending(self):
+        n_columns = 10
+        n_trials = None
+        column_params = utils.ColumnSelectionParameters(
+            method="ascending", n_trials=n_trials
+        )
+        X = np.random.normal(size=(100, n_columns))
+        rng = np.random.RandomState(42)
+
+        # line to test
+        columns = dtree.get_column(X, column_params, rng=rng)
+
+        assert columns == list(range(n_columns))
+
+    def test_ascending_first_n_trials_columns(self):
+        n_columns = 10
+        n_trials = 5
+        column_params = utils.ColumnSelectionParameters(
+            method="ascending", n_trials=n_trials
+        )
+        X = np.random.normal(size=(100, n_columns))
+        rng = np.random.RandomState(42)
+
+        # line to test
+        columns = dtree.get_column(X, column_params, rng=rng)
+
+        assert columns == list(range(n_trials))
+
+    def test_random(self):
+        n_columns = 10
+        n_trials = None
+        column_params = utils.ColumnSelectionParameters(
+            method="random", n_trials=n_trials
+        )
+        X = np.random.normal(size=(100, n_columns))
+        rng = np.random.RandomState(42)
+
+        # line to test
+        columns = dtree.get_column(X, column_params, rng=rng)
+
+        assert not all([i0 < i1 for i0, i1 in zip(columns[:-1], columns[1:])])
+        assert sorted(columns) == list(range(n_columns))
+
+    def test_random_is_reproducible(self):
+        n_columns = 10
+        n_trials = None
+        column_params = utils.ColumnSelectionParameters(
+            method="random", n_trials=n_trials
+        )
+        X = np.random.normal(size=(100, n_columns))
+
+        # line to test
+        rng = np.random.RandomState(42)
+        columns0 = dtree.get_column(X, column_params, rng=rng)
+        rng = np.random.RandomState(42)
+        columns1 = dtree.get_column(X, column_params, rng=rng)
+
+        assert columns0 == columns1
+
+    def test_largest_delta(self):
+        n_columns = 5
+        n_trials = None
+        column_params = utils.ColumnSelectionParameters(
+            method="largest_delta", n_trials=n_trials
+        )
+        rng = np.random.RandomState(42)
+        X = np.array([[0, 0.001], [0, 0.01], [0, 0.1], [0, 1.0], [0, 10.0]]).T
+
+        n_repetitions = 100
+        all_columns = np.zeros((n_repetitions, n_columns), dtype=int)
+
+        for i in range(n_repetitions):
+            # line to test
+            all_columns[i, :] = dtree.get_column(X, column_params, rng=rng)
+
+        assert np.allclose(
+            stats.mode(all_columns, axis=0).mode, [4, 3, 2, 1, 0]
+        )
 
 
 class Test_find_best_split:

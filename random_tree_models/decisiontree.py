@@ -164,15 +164,14 @@ def get_thresholds_and_target_groups(
             yield (threshold, target_groups, False)
 
 
-# TODO: add test for get_column
 def get_column(
     X: np.ndarray,
-    growth_params: utils.TreeGrowthParameters,
+    column_params: utils.ColumnSelectionParameters,
     rng: np.random.RandomState,
 ) -> T.List[int]:
     # select column order to split on
-    method = growth_params.column_params.method
-    n_columns_to_try = growth_params.column_params.n_trials
+    method = column_params.method
+    n_columns_to_try = column_params.n_trials
 
     columns = list(range(X.shape[1]))
     if method == utils.ColumnSelectionMethod.ascending:
@@ -189,7 +188,7 @@ def get_column(
         )
     else:
         raise NotImplementedError(
-            f"Unknown column selection method: {growth_params.column_method}"
+            f"Unknown column selection method: {column_params.method}"
         )
     if n_columns_to_try is not None:
         columns = columns[:n_columns_to_try]
@@ -216,7 +215,7 @@ def find_best_split(
 
     best = None  # this will be an BestSplit instance
 
-    for array_column in get_column(X, growth_params, rng):
+    for array_column in get_column(X, growth_params.column_params, rng):
         feature_values = X[:, array_column]
 
         for (
