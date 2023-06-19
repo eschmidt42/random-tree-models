@@ -6,14 +6,12 @@ from pydantic.dataclasses import dataclass
 from rich.logging import RichHandler
 
 
-# TODO: add tests
 class ColumnSelectionMethod(Enum):
     ascending = "ascending"
     largest_delta = "largest_delta"
     random = "random"
 
 
-# TODO: add tests
 class ThresholdSelectionMethod(Enum):
     bruteforce = "bruteforce"
     quantile = "quantile"
@@ -21,7 +19,6 @@ class ThresholdSelectionMethod(Enum):
     uniform = "uniform"
 
 
-# TODO: add tests
 @dataclass
 class ThresholdSelectionParameters:
     method: ThresholdSelectionMethod
