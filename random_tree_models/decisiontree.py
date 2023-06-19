@@ -99,7 +99,7 @@ def select_thresholds(
 
     method = growth_params.threshold_params.method
     n_thresholds = growth_params.threshold_params.n_thresholds
-    quantile = growth_params.threshold_params.quantile
+    num_quantile_steps = growth_params.threshold_params.num_quantile_steps
 
     if method == utils.ThresholdSelectionMethod.bruteforce:
         return feature_values[1:]
@@ -113,8 +113,7 @@ def select_thresholds(
                 replace=False,
             )
     elif method == utils.ThresholdSelectionMethod.quantile:
-        dq = int(1 / quantile) + 1
-        qs = np.linspace(0, 1, dq)
+        qs = np.linspace(0, 1, num_quantile_steps)
         return np.quantile(feature_values[1:], qs)
     elif method == utils.ThresholdSelectionMethod.uniform:
         x = np.linspace(

@@ -56,6 +56,9 @@ class ThresholdSelectionParameters:
         if not is_okay:
             raise ValueError(f"{self.n_thresholds=} not > 0")
 
+        # set dq
+        self.num_quantile_steps = int(1 / self.quantile) + 1
+
 
 # TODO: add tests
 @dataclass
