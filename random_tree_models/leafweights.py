@@ -6,15 +6,11 @@ import numpy as np
 import random_tree_models.utils as utils
 
 
-def leaf_weight_mean(
-    y: np.ndarray, growth_params: utils.TreeGrowthParameters, **kwargs
-) -> float:
+def leaf_weight_mean(y: np.ndarray, **kwargs) -> float:
     return np.mean(y)
 
 
 def leaf_weight_binary_classification_friedman2001(
-    y: np.ndarray,
-    growth_params: utils.TreeGrowthParameters,
     g: np.ndarray,
     **kwargs,
 ) -> float:
@@ -26,7 +22,6 @@ def leaf_weight_binary_classification_friedman2001(
 
 
 def leaf_weight_xgboost(
-    y: np.ndarray,
     growth_params: utils.TreeGrowthParameters,
     g: np.ndarray,
     h: np.ndarray,
@@ -38,7 +33,6 @@ def leaf_weight_xgboost(
     return w
 
 
-# TODO: add tests for this class and the assigned leaf weight functions
 class LeafWeightSchemes(Enum):
     # https://stackoverflow.com/questions/40338652/how-to-define-enum-values-that-are-functions
     friedman_binary_classification = partial(
@@ -59,7 +53,7 @@ class LeafWeightSchemes(Enum):
         g: np.ndarray = None,
         h: np.ndarray = None,
     ) -> float:
-        return self.value(y, growth_params, g=g, h=h)
+        return self.value(y=y, growth_params=growth_params, g=g, h=h)
 
 
 def calc_leaf_weight(
@@ -68,7 +62,7 @@ def calc_leaf_weight(
     growth_params: utils.TreeGrowthParameters,
     g: np.ndarray = None,
     h: np.ndarray = None,
-) -> np.ndarray:
+) -> float:
     """Calculates the leaf weight, depending on the choice of measure_name.
 
     This computation assumes all y values are part of the same leaf.
@@ -78,6 +72,6 @@ def calc_leaf_weight(
         return None
 
     weight_func = LeafWeightSchemes[measure_name]
-    leaf_weights = weight_func(y, growth_params, g=g, h=h)
+    leaf_weight = weight_func(y=y, growth_params=growth_params, g=g, h=h)
 
-    return leaf_weights
+    return leaf_weight
