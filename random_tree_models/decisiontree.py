@@ -127,10 +127,9 @@ def select_thresholds(
         )
 
 
-# TODO: add test for get_thresholds_and_target_groups
 def get_thresholds_and_target_groups(
     feature_values: np.ndarray,
-    growth_params: utils.TreeGrowthParameters,
+    threshold_params: utils.ThresholdSelectionParameters,
     rng: np.random.RandomState,
 ) -> T.Generator[T.Tuple[np.ndarray, np.ndarray, bool], None, None]:
     "Creates a generator for split finding, returning the used threshold, the target groups and a bool indicating if the default direction is left"
@@ -140,9 +139,7 @@ def get_thresholds_and_target_groups(
 
     if all_finite:
         default_direction_is_left = None
-        thresholds = select_thresholds(
-            feature_values, growth_params.threshold_params, rng
-        )
+        thresholds = select_thresholds(feature_values, threshold_params, rng)
 
         for threshold in thresholds:
             target_groups = feature_values < threshold
@@ -150,7 +147,7 @@ def get_thresholds_and_target_groups(
     else:
         finite_feature_values = feature_values[is_finite]
         thresholds = select_thresholds(
-            finite_feature_values, growth_params.threshold_params, rng
+            finite_feature_values, threshold_params, rng
         )
 
         for threshold in thresholds:
@@ -227,7 +224,7 @@ def find_best_split(
             target_groups,
             default_is_left,
         ) in get_thresholds_and_target_groups(
-            feature_values, growth_params, rng
+            feature_values, growth_params.threshold_params, rng
         ):
             split_score = scoring.SplitScoreMetrics[measure_name](
                 y,

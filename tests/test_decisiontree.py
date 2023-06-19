@@ -1,3 +1,4 @@
+import types
 from unittest.mock import patch
 
 import numpy as np
@@ -325,6 +326,78 @@ class Test_select_thresholds:
         assert thresholds.shape == (1,)
         assert thresholds[0] >= feature_values.min()
         assert thresholds[0] <= feature_values.max()
+
+
+class Test_get_thresholds_and_target_groups:
+    """
+    * preduces a generator
+    * produces twice as many items to iterate in the case of missing values
+    * each item contains the current threshold, the target groups and a boolean that indicates the default direction
+    * the default direction is always None if there are no missing values and otherwise boolean
+    """
+
+    def test_produces_generator(self):
+        feature_values = np.linspace(-1, 1, 10)
+        threshold_params = utils.ThresholdSelectionParameters(
+            method="bruteforce"
+        )
+        rng = np.random.RandomState(42)
+
+        # line to test
+        gen = dtree.get_thresholds_and_target_groups(
+            feature_values, threshold_params, rng=rng
+        )
+
+        assert isinstance(gen, types.GeneratorType)
+
+    def test_finite_only_case(self):
+        feature_values = np.linspace(-1, 1, 10)
+        threshold_params = utils.ThresholdSelectionParameters(
+            method="bruteforce"
+        )
+        rng = np.random.RandomState(42)
+
+        # line to test
+        for i, (
+            threshold,
+            target_groups,
+            default_direction_is_left,
+        ) in enumerate(
+            dtree.get_thresholds_and_target_groups(
+                feature_values, threshold_params, rng=rng
+            )
+        ):
+            assert isinstance(target_groups, np.ndarray)
+            assert threshold in feature_values[1:]
+            assert target_groups.dtype == bool
+            assert default_direction_is_left is None
+
+        assert i == len(feature_values[1:]) - 1
+
+    def test_with_missing_case(self):
+        feature_values = np.linspace(-1, 1, 10)
+        feature_values[5] = np.nan
+        threshold_params = utils.ThresholdSelectionParameters(
+            method="bruteforce"
+        )
+        rng = np.random.RandomState(42)
+
+        # line to test
+        for i, (
+            threshold,
+            target_groups,
+            default_direction_is_left,
+        ) in enumerate(
+            dtree.get_thresholds_and_target_groups(
+                feature_values, threshold_params, rng=rng
+            )
+        ):
+            assert isinstance(target_groups, np.ndarray)
+            assert threshold in feature_values[1:]
+            assert target_groups.dtype == bool
+            assert default_direction_is_left in [True, False]
+
+        assert i == 2 * (len(feature_values[1:]) - 1) - 1
 
 
 class Test_find_best_split:
