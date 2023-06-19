@@ -886,6 +886,41 @@ def test_calc_leaf_weight_and_split_score():
     assert mock_SplitScoreMetrics.call_count == 1
 
 
+@pytest.mark.parametrize("go_left", [True, False])
+def test_select_arrays_for_child_node(go_left: bool):
+    best = dtree.BestSplit(
+        score=1.0,
+        column=0,
+        threshold=2.0,
+        target_groups=np.array([True, True, False]),
+    )
+
+    X = np.array([[1], [2], [3]])
+    y = np.array([True, True, False])
+    g = np.array([1, 2, 3])
+    h = np.array([4, 5, 6])
+
+    # line to test
+    _X, _y, _g, _h = dtree.select_arrays_for_child_node(
+        go_left=go_left,
+        best=best,
+        X=X,
+        y=y,
+        g=g,
+        h=h,
+    )
+    if go_left:
+        assert np.allclose(_X, X[:2])
+        assert np.allclose(_y, y[:2])
+        assert np.allclose(_g, g[:2])
+        assert np.allclose(_h, h[:2])
+    else:
+        assert np.allclose(_X, X[2:])
+        assert np.allclose(_y, y[2:])
+        assert np.allclose(_g, g[2:])
+        assert np.allclose(_h, h[2:])
+
+
 class Test_grow_tree:
     X = np.array([[1], [2], [3]])
     y = np.array([True, True, False])

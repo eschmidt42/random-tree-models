@@ -293,7 +293,6 @@ def calc_leaf_weight_and_split_score(
     return leaf_weight, score
 
 
-# TODO: add test for select_arrays_for_child_node
 def select_arrays_for_child_node(
     go_left: bool,
     best: BestSplit,
