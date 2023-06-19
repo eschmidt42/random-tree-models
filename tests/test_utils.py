@@ -106,3 +106,98 @@ class TestThresholdSelectionParameters:
         else:
             if fail:
                 pytest.fail(f"init with {n_thresholds=} should fail: {ex}")
+
+
+def test_ColumnSelectionParameters():
+    params = utils.ColumnSelectionParameters(method="random", n_trials=10)
+    assert params.method == utils.ColumnSelectionMethod.random
+    assert params.n_trials == 10
+
+
+class TestTreeGrowthParameters:
+    def test_expected_okay(self):
+        params = utils.TreeGrowthParameters(
+            max_depth=10,
+            min_improvement=0.0,
+            lam=0.0,
+            frac_subsamples=1.0,
+            frac_features=1.0,
+            random_state=0,
+            threshold_params=utils.ThresholdSelectionParameters(
+                method="quantile",
+                quantile=0.1,
+                random_state=0,
+                n_thresholds=100,
+            ),
+            column_params=utils.ColumnSelectionParameters(
+                method="random", n_trials=10
+            ),
+        )
+        assert params.max_depth == 10
+        assert params.min_improvement == 0.0
+        assert params.lam == 0.0
+        assert params.frac_subsamples == 1.0
+        assert params.frac_features == 1.0
+        assert params.random_state == 0
+        assert isinstance(
+            params.threshold_params, utils.ThresholdSelectionParameters
+        )
+        assert isinstance(params.column_params, utils.ColumnSelectionParameters)
+
+    @pytest.mark.parametrize(
+        "frac_subsamples,fail",
+        [
+            (-0.1, True),
+            (0.0, True),
+            (0.5, False),
+            (1.0, False),
+            (1.1, True),
+        ],
+    )
+    def test_frac_subsamples(self, frac_subsamples: float, fail: bool):
+        try:
+            _ = utils.TreeGrowthParameters(
+                max_depth=10,
+                frac_subsamples=frac_subsamples,
+            )
+        except ValueError as ex:
+            if fail:
+                pytest.xfail(f"init with {frac_subsamples=} should fail: {ex}")
+            else:
+                pytest.fail(f"init with {frac_subsamples=} should fail: {ex}")
+        else:
+            if fail:
+                pytest.fail(f"init with {frac_subsamples=} should fail: {ex}")
+
+    @pytest.mark.parametrize(
+        "frac_features,fail",
+        [
+            (-0.1, True),
+            (0.0, True),
+            (0.5, False),
+            (1.0, False),
+            (1.1, True),
+        ],
+    )
+    def test_frac_features(self, frac_features: float, fail: bool):
+        try:
+            _ = utils.TreeGrowthParameters(
+                max_depth=10,
+                frac_features=frac_features,
+            )
+        except ValueError as ex:
+            if fail:
+                pytest.xfail(f"init with {frac_features=} should fail: {ex}")
+            else:
+                pytest.fail(f"init with {frac_features=} should fail: {ex}")
+        else:
+            if fail:
+                pytest.fail(f"init with {frac_features=} should fail: {ex}")
+
+    def test_fail_if_max_depth_missing(self):
+        try:
+            _ = utils.TreeGrowthParameters()
+        except TypeError as ex:
+            pytest.xfail(f"init without max_depth should fail: {ex}")
+        else:
+            pytest.fail(f"init without max_depth should have failed: {ex}")

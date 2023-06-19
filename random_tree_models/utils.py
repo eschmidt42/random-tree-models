@@ -57,14 +57,12 @@ class ThresholdSelectionParameters:
         self.num_quantile_steps = int(1 / self.quantile) + 1
 
 
-# TODO: add tests
 @dataclass
 class ColumnSelectionParameters:
     method: ColumnSelectionMethod
     n_trials: StrictInt = None
 
 
-# TODO: add tests
 @dataclass
 class TreeGrowthParameters:
     max_depth: StrictInt
