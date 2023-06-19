@@ -92,7 +92,6 @@ class TreeGrowthParameters:
             raise ValueError(f"{self.frac_features=} not in (0, 1]")
 
 
-# TODO: add tests
 def _get_logger(level=logging.INFO):
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
@@ -103,7 +102,9 @@ def _get_logger(level=logging.INFO):
         datefmt="[%X]",
         handlers=[RichHandler(rich_tracebacks=True)],
     )
-    return logging.getLogger("rich")
+    logger = logging.getLogger("rich")
+    logger.setLevel(level)
+    return logger
 
 
 logger = _get_logger()

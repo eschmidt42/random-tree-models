@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 
 import random_tree_models.utils as utils
@@ -201,3 +203,10 @@ class TestTreeGrowthParameters:
             pytest.xfail(f"init without max_depth should fail: {ex}")
         else:
             pytest.fail(f"init without max_depth should have failed: {ex}")
+
+
+def test_get_logger():
+    logger = utils._get_logger()
+    assert isinstance(logger, logging.Logger)
+    assert logger.name == "rich"
+    assert logger.level == logging.INFO
