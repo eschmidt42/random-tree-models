@@ -199,7 +199,7 @@ def get_column(
 def find_best_split(
     X: np.ndarray,
     y: np.ndarray,
-    measure_name: str,
+    measure_name: scoring.SplitScoreMetrics,
     yhat: np.ndarray = None,
     g: np.ndarray = None,
     h: np.ndarray = None,
@@ -225,13 +225,13 @@ def find_best_split(
         ) in get_thresholds_and_target_groups(
             feature_values, growth_params.threshold_params, rng
         ):
-            split_score = scoring.SplitScoreMetrics[measure_name](
+            split_score = scoring.calc_score(
                 y,
                 target_groups,
-                yhat=yhat,
                 g=g,
                 h=h,
                 growth_params=growth_params,
+                score_metric=measure_name,
             )
 
             if best is None or split_score > best.score:
@@ -271,7 +271,7 @@ def check_if_split_sensible(
 
 def calc_leaf_weight_and_split_score(
     y: np.ndarray,
-    measure_name: str,
+    measure_name: scoring.SplitScoreMetrics,
     growth_params: utils.TreeGrowthParameters,
     g: np.ndarray,
     h: np.ndarray,
@@ -280,14 +280,14 @@ def calc_leaf_weight_and_split_score(
         y, measure_name, growth_params, g=g, h=h
     )
 
-    yhat = leaf_weight * np.ones_like(y)
-    score = scoring.SplitScoreMetrics[measure_name](
+    # yhat = leaf_weight * np.ones_like(y)
+    score = scoring.calc_score(
         y,
         np.ones_like(y, dtype=bool),
-        yhat=yhat,
         g=g,
         h=h,
         growth_params=growth_params,
+        score_metric=measure_name,
     )
 
     return leaf_weight, score
@@ -312,7 +312,7 @@ def select_arrays_for_child_node(
 def grow_tree(
     X: np.ndarray,
     y: np.ndarray,
-    measure_name: str,
+    measure_name: scoring.SplitScoreMetrics,
     parent_node: Node = None,
     depth: int = 0,
     growth_params: utils.TreeGrowthParameters = None,
@@ -367,7 +367,7 @@ def grow_tree(
     if is_baselevel:  # end of the line buddy
         return Node(
             prediction=leaf_weight,
-            measure=SplitScore(measure_name, score=score),
+            measure=SplitScore(measure_name.name, score=score),
             n_obs=n_obs,
             reason=reason,
             depth=depth,
@@ -389,7 +389,7 @@ def grow_tree(
         reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=} or all data points assigned to one side (is left {best.target_groups.mean()=:.2%})"
         leaf_node = Node(
             prediction=leaf_weight,
-            measure=SplitScore(measure_name, score=score),
+            measure=SplitScore(measure_name.name, score=score),
             n_obs=n_obs,
             reason=reason,
             depth=depth,
@@ -402,7 +402,7 @@ def grow_tree(
         threshold=best.threshold,
         prediction=leaf_weight,
         default_is_left=best.default_is_left,
-        measure=SplitScore(measure_name, best.score),
+        measure=SplitScore(measure_name.name, best.score),
         n_obs=n_obs,
         reason="",
         depth=depth,
@@ -514,7 +514,19 @@ class DecisionTreeTemplate(base.BaseEstimator):
         self.column_method = column_method
         self.n_columns_to_try = n_columns_to_try
 
+    def _sanity_check_measure_name(self):
+        try:
+            self.measure_name_enum_ = scoring.SplitScoreMetrics[
+                self.measure_name
+            ]
+        except KeyError as ex:
+            raise KeyError(
+                f"Unknown measure_name: {self.measure_name}. "
+                f"Valid options: {', '.join(list(scoring.SplitScoreMetrics.__members__.keys()))}. {ex=}"
+            )
+
     def _organize_growth_parameters(self):
+        self._sanity_check_measure_name()
         self.growth_params_ = utils.TreeGrowthParameters(
             max_depth=self.max_depth,
             min_improvement=self.min_improvement,
@@ -539,7 +551,7 @@ class DecisionTreeTemplate(base.BaseEstimator):
     ) -> T.Tuple[np.ndarray, np.ndarray, np.ndarray]:
         "Sub-samples rows and columns from X and y"
         if not hasattr(self, "growth_params_"):
-            raise ValueError(f"Try calling `fit` first.")
+            raise ValueError("Try calling `fit` first.")
 
         ix = np.arange(len(X))
         rng = np.random.RandomState(self.growth_params_.random_state)
@@ -611,7 +623,7 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
         self.tree_ = grow_tree(
             _X,
             _y,
-            measure_name=self.measure_name,
+            measure_name=self.measure_name_enum_,
             growth_params=self.growth_params_,
             random_state=self.random_state,
             **kwargs,
@@ -675,7 +687,7 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
         self.tree_ = grow_tree(
             _X,
             _y,
-            measure_name=self.measure_name,
+            measure_name=self.measure_name_enum_,
             growth_params=self.growth_params_,
             random_state=self.random_state,
         )

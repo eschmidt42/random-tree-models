@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 import random_tree_models.leafweights as leafweights
+import random_tree_models.scoring as scoring
 import random_tree_models.utils as utils
 
 
@@ -31,38 +32,6 @@ def test_leaf_weight_xgboost():
     )
 
 
-class TestLeafWeightSchemes:
-    def test_leaf_weight_mean_references(self):
-        mean_schemes = [
-            "variance",
-            "entropy",
-            "entropy_rs",
-            "gini",
-            "gini_rs",
-            "incrementing",
-        ]
-
-        for scheme in mean_schemes:
-            assert (
-                leafweights.LeafWeightSchemes[scheme].value.func
-                is leafweights.leaf_weight_mean
-            )
-
-    def test_leaf_weight_xgboost_references(self):
-        assert (
-            leafweights.LeafWeightSchemes["xgboost"].value.func
-            is leafweights.leaf_weight_xgboost
-        )
-
-    def test_leaf_weight_friedman_references(self):
-        assert (
-            leafweights.LeafWeightSchemes[
-                "friedman_binary_classification"
-            ].value.func
-            is leafweights.leaf_weight_binary_classification_friedman2001
-        )
-
-
 class Test_calc_leaf_weight:
     def test_error_for_unknown_scheme(self):
         y = np.array([1, 2, 3])
@@ -71,7 +40,7 @@ class Test_calc_leaf_weight:
             leafweights.calc_leaf_weight(
                 y=y, growth_params=growth_params, measure_name="not_a_scheme"
             )
-        except KeyError as ex:
+        except KeyError:
             pytest.xfail("ValueError correctly raised for unknown scheme")
         else:
             pytest.fail("ValueError not raised for unknown scheme")
@@ -91,6 +60,8 @@ class Test_calc_leaf_weight:
         growth_params = utils.TreeGrowthParameters(max_depth=2, lam=0.0)
 
         weight = leafweights.calc_leaf_weight(
-            y=y, growth_params=growth_params, measure_name="variance"
+            y=y,
+            growth_params=growth_params,
+            measure_name=scoring.SplitScoreMetrics["variance"],
         )
         assert isinstance(weight, float)

@@ -380,6 +380,7 @@ def test_calc_xgboost_split_score(
 
 class TestSplitScoreMetrics:
     "Redudancy test - calling calc_xgboost_split_score etc via SplitScoreMetrics needs to yield the same values as in the test above."
+
     y = np.array([1, 1, 2, 2])
     target_groups = np.array([False, True, False, True])
 
@@ -388,28 +389,36 @@ class TestSplitScoreMetrics:
     var_exp = -0.25
 
     def test_gini(self):
-        g = scoring.SplitScoreMetrics["gini"](self.y, self.target_groups)
+        measure = scoring.SplitScoreMetrics["gini"]
+        g = scoring.calc_score(self.y, self.target_groups, score_metric=measure)
         assert g == self.g_exp
 
     def test_gini_rs(self):
-        g = scoring.SplitScoreMetrics["gini_rs"](self.y, self.target_groups)
+        measure = scoring.SplitScoreMetrics["gini_rs"]
+        g = scoring.calc_score(self.y, self.target_groups, score_metric=measure)
         assert g == self.g_exp
 
     def test_entropy(self):
-        h = scoring.SplitScoreMetrics["entropy"](self.y, self.target_groups)
+        measure = scoring.SplitScoreMetrics["entropy"]
+        h = scoring.calc_score(self.y, self.target_groups, score_metric=measure)
         assert h == self.h_exp
 
-    def test_entropy(self):
-        h = scoring.SplitScoreMetrics["entropy_rs"](self.y, self.target_groups)
+    def test_entropy_rs(self):
+        measure = scoring.SplitScoreMetrics["entropy_rs"]
+        h = scoring.calc_score(self.y, self.target_groups, score_metric=measure)
         assert h == self.h_exp
 
     def test_variance(self):
-        var = scoring.SplitScoreMetrics["variance"](self.y, self.target_groups)
+        measure = scoring.SplitScoreMetrics["variance"]
+        var = scoring.calc_score(
+            self.y, self.target_groups, score_metric=measure
+        )
         assert var == self.var_exp
 
     def test_friedman_binary_classification(self):
-        var = scoring.SplitScoreMetrics["friedman_binary_classification"](
-            self.y, self.target_groups
+        measure = scoring.SplitScoreMetrics["friedman_binary_classification"]
+        var = scoring.calc_score(
+            self.y, self.target_groups, score_metric=measure
         )
         assert var == self.var_exp
 

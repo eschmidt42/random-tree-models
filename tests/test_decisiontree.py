@@ -8,6 +8,7 @@ from scipy import stats
 from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.decisiontree as dtree
+import random_tree_models.scoring as scoring
 import random_tree_models.utils as utils
 
 # first value in each tuple is the value to test and the second is the flag indicating if this should work
@@ -149,8 +150,6 @@ def test_Node(int_val, float_val, node_val, str_val, bool_val):
     ],
 )
 def test_check_is_baselevel(y, depths):
-    node = dtree.Node()
-
     y, is_baselevel_exp_y = y
     depth, max_depth, is_baselevel_exp_depth = depths
     is_baselevel_exp = is_baselevel_exp_depth or is_baselevel_exp_y
@@ -592,7 +591,7 @@ class Test_find_best_split:
             best = dtree.find_best_split(
                 self.X_1D,
                 y,
-                measure_name=measure_name,
+                measure_name=scoring.SplitScoreMetrics[measure_name],
                 g=g,
                 h=h,
                 growth_params=grow_params,
@@ -644,7 +643,7 @@ class Test_find_best_split:
             best = dtree.find_best_split(
                 self.X_1D_missing,
                 y,
-                measure_name=measure_name,
+                measure_name=scoring.SplitScoreMetrics[measure_name],
                 g=g,
                 h=h,
                 growth_params=grow_params,
@@ -696,7 +695,7 @@ class Test_find_best_split:
             best = dtree.find_best_split(
                 self.X_2D,
                 y,
-                measure_name,
+                scoring.SplitScoreMetrics[measure_name],
                 g=g,
                 h=h,
                 growth_params=growth_params,
@@ -749,7 +748,7 @@ class Test_find_best_split:
             best = dtree.find_best_split(
                 self.X_2D_missing,
                 y,
-                measure_name,
+                scoring.SplitScoreMetrics[measure_name],
                 g=g,
                 h=h,
                 growth_params=growth_params,
@@ -855,35 +854,39 @@ def test_check_if_split_sensible(
         assert gain is None
 
 
-def test_calc_leaf_weight_and_split_score():
-    # calls leafweights.calc_leaf_weight and scoreing.SplitScoreMetrics
-    # and returns two floats
-    y = np.array([True, True, False])
-    measure_name = "gini"
-    growth_params = utils.TreeGrowthParameters(max_depth=2)
-    g = np.array([1, 2, 3])
-    h = np.array([4, 5, 6])
-    leaf_weight_exp = 1.0
-    score_exp = 42.0
-    with (
-        patch(
-            "random_tree_models.decisiontree.leafweights.calc_leaf_weight",
-            return_value=leaf_weight_exp,
-        ) as mock_calc_leaf_weight,
-        patch(
-            "random_tree_models.decisiontree.scoring.SplitScoreMetrics.__call__",
-            return_value=score_exp,
-        ) as mock_SplitScoreMetrics,
-    ):
-        # line to test
-        leaf_weight, split_score = dtree.calc_leaf_weight_and_split_score(
-            y, measure_name, growth_params, g, h
-        )
-
-    assert leaf_weight == leaf_weight_exp
-    assert split_score == score_exp
-    assert mock_calc_leaf_weight.call_count == 1
-    assert mock_SplitScoreMetrics.call_count == 1
+# write tests for calc_leaf_weight_and_split_score
+@pytest.mark.parametrize(
+    "y,measure_name,growth_params,g,h",
+    [
+        (y, measure_name, growth_params, g, h)
+        for y in [
+            np.array([True, True, False]),
+            np.array([True, True, True]),
+            np.array([False, False, False]),
+        ]
+        for measure_name in [
+            scoring.SplitScoreMetrics.gini,
+            scoring.SplitScoreMetrics.entropy,
+        ]
+        for growth_params in [
+            utils.TreeGrowthParameters(max_depth=2),
+            utils.TreeGrowthParameters(max_depth=2, min_improvement=0.2),
+        ]
+        for g in [np.array([1, 2, 3])]
+        for h in [np.array([4, 5, 6])]
+    ],
+)
+def test_calc_leaf_weight_and_split_score(
+    y: np.ndarray,
+    measure_name: str,
+    growth_params: utils.TreeGrowthParameters,
+    g: np.ndarray,
+    h: np.ndarray,
+):
+    # line to test
+    _, _ = dtree.calc_leaf_weight_and_split_score(
+        y, measure_name, growth_params, g, h
+    )
 
 
 @pytest.mark.parametrize("go_left", [True, False])
@@ -925,7 +928,7 @@ class Test_grow_tree:
     X = np.array([[1], [2], [3]])
     y = np.array([True, True, False])
     target_groups = np.array([True, True, False])
-    measure_name = "gini"
+    measure_name = scoring.SplitScoreMetrics["gini"]
     depth_dummy = 0
 
     def test_baselevel(self):
@@ -949,7 +952,7 @@ class Test_grow_tree:
             )
 
             mock_check_is_baselevel.assert_called_once()
-            assert leaf_node.is_leaf == True
+            assert leaf_node.is_leaf is True
             assert leaf_node.reason == reason
 
     def test_split_improvement_insufficient(self):
@@ -965,7 +968,7 @@ class Test_grow_tree:
             threshold=3.0,
             target_groups=self.target_groups,
         )
-        measure = dtree.SplitScore(self.measure_name, parent_score)
+        measure = dtree.SplitScore(self.measure_name.name, parent_score)
         parent_node = dtree.Node(
             array_column=0,
             threshold=1.0,
@@ -1019,7 +1022,7 @@ class Test_grow_tree:
             threshold=3.0,
             target_groups=self.target_groups,
         )
-        measure = dtree.SplitScore(self.measure_name, parent_score)
+        measure = dtree.SplitScore(self.measure_name.name, parent_score)
         parent_node = dtree.Node(
             array_column=0,
             threshold=1.0,
@@ -1064,19 +1067,19 @@ class Test_grow_tree:
             assert tree.reason == ""
             assert tree.prediction == np.mean(self.y)
             assert tree.n_obs == len(self.y)
-            assert tree.is_leaf == False
+            assert tree.is_leaf is False
 
             # left leaf
             assert tree.left.reason == leaf_reason
             assert tree.left.prediction == 1.0
             assert tree.left.n_obs == 2
-            assert tree.left.is_leaf == True
+            assert tree.left.is_leaf is True
 
             # right leaf
             assert tree.right.reason == leaf_reason
             assert tree.right.prediction == 0.0
             assert tree.right.n_obs == 1
-            assert tree.right.is_leaf == True
+            assert tree.right.is_leaf is True
 
 
 @pytest.mark.parametrize(
@@ -1144,7 +1147,7 @@ def test_predict_with_tree():
 
 
 class TestDecisionTreeTemplate:
-    model = dtree.DecisionTreeTemplate()
+    model = dtree.DecisionTreeTemplate(measure_name="gini")
     X = np.random.normal(size=(100, 10))
     y = np.random.normal(size=(100,))
 
@@ -1160,13 +1163,13 @@ class TestDecisionTreeTemplate:
     def test_fit(self):
         try:
             self.model.fit(None, None)
-        except NotImplementedError as ex:
+        except NotImplementedError:
             pytest.xfail("DecisionTreeTemplate.fit expectedly refused call")
 
     def test_predict(self):
         try:
             self.model.predict(None)
-        except NotImplementedError as ex:
+        except NotImplementedError:
             pytest.xfail("DecisionTreeTemplate.predict expectedly refused call")
 
     def test_select_samples_and_features_no_sampling(self):
@@ -1325,7 +1328,10 @@ class TestDecisionTreeClassifier:
 
 @pytest.mark.slow
 @parametrize_with_checks(
-    [dtree.DecisionTreeRegressor(), dtree.DecisionTreeClassifier()]
+    [
+        dtree.DecisionTreeRegressor(measure_name="variance"),
+        dtree.DecisionTreeClassifier(measure_name="gini"),
+    ]
 )
 def test_dtree_estimators_with_sklearn_checks(estimator, check):
     """Test of estimators using scikit-learn test suite

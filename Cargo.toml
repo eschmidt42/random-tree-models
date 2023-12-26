@@ -9,7 +9,7 @@ name = "random_tree_models"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = "0.18.3"
+pyo3 = "0.20.0"
 
 [features]
 extension-module = ["pyo3/extension-module"]
