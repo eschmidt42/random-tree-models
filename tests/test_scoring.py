@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 import pytest
 
@@ -359,11 +360,11 @@ def test_calc_xgboost_split_score(
     g: np.ndarray, h: np.ndarray, target_groups: np.ndarray, score_exp: float
 ):
     growth_params = utils.TreeGrowthParameters(max_depth=2, lam=0.0)
-    y = None
+
     try:
         # line to test
         score = scoring.calc_xgboost_split_score(
-            y, target_groups, g, h, growth_params
+            target_groups, g, h, growth_params
         )
     except ValueError as ex:
         if score_exp is None:
@@ -461,11 +462,10 @@ class TestSplitScoreMetrics:
         score_exp: float,
     ):
         growth_params = utils.TreeGrowthParameters(max_depth=2, lam=0.0)
-        y = None
 
         # line to test
         score = scoring.calc_xgboost_split_score(
-            y, target_groups, g, h, growth_params
+            target_groups, g, h, growth_params
         )
 
         assert score == score_exp

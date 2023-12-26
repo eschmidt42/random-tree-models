@@ -1,16 +1,16 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 
 import random_tree_models.scoring as scoring
 import random_tree_models.utils as utils
 
 
-def leaf_weight_mean(y: np.ndarray, **kwargs) -> float:
+def leaf_weight_mean(y: np.ndarray) -> float:
     return np.mean(y)
 
 
 def leaf_weight_binary_classification_friedman2001(
     g: np.ndarray,
-    **kwargs,
 ) -> float:
     "Computes optimal leaf weight as in Friedman et al. 2001 Algorithm 5"
 
@@ -23,7 +23,6 @@ def leaf_weight_xgboost(
     growth_params: utils.TreeGrowthParameters,
     g: np.ndarray,
     h: np.ndarray,
-    **kwargs,
 ) -> float:
     "Computes optimal leaf weight as in Chen et al. 2016 equation 5"
 

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 import pytest
 
@@ -8,27 +9,23 @@ import random_tree_models.utils as utils
 
 def test_leaf_weight_mean():
     y = np.array([1, 2, 3])
-    g = np.array([1, 2, 3]) * 2
-    assert leafweights.leaf_weight_mean(y=y, g=g) == 2.0
+    assert leafweights.leaf_weight_mean(y=y) == 2.0
 
 
 def test_leaf_weight_binary_classification_friedman2001():
-    y = np.array([1, 2, 3])
     g = np.array([1, 2, 3]) * 2
     assert (
-        leafweights.leaf_weight_binary_classification_friedman2001(y=y, g=g)
+        leafweights.leaf_weight_binary_classification_friedman2001(g=g)
         == -0.375
     )
 
 
 def test_leaf_weight_xgboost():
-    y = np.array([1, 2, 3])
     g = np.array([1, 2, 3]) * 2
     h = np.array([1, 2, 3]) * 4
     params = utils.TreeGrowthParameters(max_depth=2, lam=0.0)
     assert (
-        leafweights.leaf_weight_xgboost(y=y, g=g, h=h, growth_params=params)
-        == -0.5
+        leafweights.leaf_weight_xgboost(growth_params=params, g=g, h=h) == -0.5
     )
 
 

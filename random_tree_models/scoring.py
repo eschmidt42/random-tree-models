@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from enum import Enum
 
 import numpy as np
@@ -15,7 +16,7 @@ def check_y_and_target_groups(y: np.ndarray, target_groups: np.ndarray = None):
         raise ValueError(f"{y.shape=} != {target_groups.shape=}")
 
 
-def calc_variance(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
+def calc_variance(y: np.ndarray, target_groups: np.ndarray) -> float:
     """Calculates the variance of a split"""
 
     check_y_and_target_groups(y, target_groups=target_groups)
@@ -57,7 +58,7 @@ def entropy(y: np.ndarray) -> float:
     return h
 
 
-def calc_entropy(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
+def calc_entropy(y: np.ndarray, target_groups: np.ndarray) -> float:
     """Calculates the entropy of a split"""
 
     check_y_and_target_groups(y, target_groups=target_groups)
@@ -72,9 +73,7 @@ def calc_entropy(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
     return h
 
 
-def calc_entropy_rs(
-    y: np.ndarray, target_groups: np.ndarray, **kwargs
-) -> float:
+def calc_entropy_rs(y: np.ndarray, target_groups: np.ndarray) -> float:
     """Calculates the entropy of a split"""
 
     check_y_and_target_groups(y, target_groups=target_groups)
@@ -112,9 +111,7 @@ def gini_impurity(y: np.ndarray) -> float:
     return -g
 
 
-def calc_gini_impurity(
-    y: np.ndarray, target_groups: np.ndarray, **kwargs
-) -> float:
+def calc_gini_impurity(y: np.ndarray, target_groups: np.ndarray) -> float:
     """Calculates the gini impurity of a split
 
     Based on: https://scikit-learn.org/stable/modules/tree.html#classification-criteria
@@ -132,9 +129,7 @@ def calc_gini_impurity(
     return g
 
 
-def calc_gini_impurity_rs(
-    y: np.ndarray, target_groups: np.ndarray, **kwargs
-) -> float:
+def calc_gini_impurity_rs(y: np.ndarray, target_groups: np.ndarray) -> float:
     """Calculates the gini impurity of a split
 
     Based on: https://scikit-learn.org/stable/modules/tree.html#classification-criteria
@@ -171,12 +166,10 @@ def xgboost_split_score(
 
 
 def calc_xgboost_split_score(
-    y: np.ndarray,
     target_groups: np.ndarray,
     g: np.ndarray,
     h: np.ndarray,
     growth_params: utils.TreeGrowthParameters,
-    **kwargs,
 ) -> float:
     """Calculates the xgboost general version score of a split with loss specifics in g and h.
 
@@ -250,9 +243,7 @@ def calc_score(
         case SplitScoreMetrics.friedman_binary_classification:
             return calc_variance(y, target_groups)
         case SplitScoreMetrics.xgboost:
-            return calc_xgboost_split_score(
-                y, target_groups, g, h, growth_params
-            )
+            return calc_xgboost_split_score(target_groups, g, h, growth_params)
         case SplitScoreMetrics.incrementing:
             return IncrementingScore()()
         case _:
