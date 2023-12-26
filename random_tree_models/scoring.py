@@ -198,9 +198,9 @@ def calc_xgboost_split_score(
 
 
 class IncrementingScore:
-    score = 0
+    score: int = 0
 
-    def __call__(self, *args, **kwargs) -> float:
+    def update(self) -> float:
         """Calculates the random cut score of a split"""
         self.score += 1
         return self.score
@@ -224,6 +224,7 @@ def calc_score(
     h: np.ndarray = None,
     growth_params: utils.TreeGrowthParameters = None,
     score_metric: SplitScoreMetrics = SplitScoreMetrics.variance,
+    incrementing_score: IncrementingScore = None,
 ) -> float:
     match score_metric:
         case SplitScoreMetrics.variance:
@@ -241,6 +242,10 @@ def calc_score(
         case SplitScoreMetrics.xgboost:
             return calc_xgboost_split_score(target_groups, g, h, growth_params)
         case SplitScoreMetrics.incrementing:
-            return IncrementingScore()()
+            if incrementing_score is None:
+                raise ValueError(
+                    f"{incrementing_score=} must be provided as an instance of scoring.IncrementingScore {score_metric=}"
+                )
+            return incrementing_score.update()
         case _:
             raise ValueError(f"{score_metric=} not supported")

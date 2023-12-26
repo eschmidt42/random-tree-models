@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import typing as T
 import uuid
 
@@ -205,6 +206,7 @@ def find_best_split(
     h: np.ndarray = None,
     growth_params: utils.TreeGrowthParameters = None,
     rng: np.random.RandomState = np.random.RandomState(42),
+    incrementing_score: scoring.IncrementingScore = None,
 ) -> BestSplit:
     """Find the best split, detecting the "default direction" with missing data."""
 
@@ -232,6 +234,7 @@ def find_best_split(
                 h=h,
                 growth_params=growth_params,
                 score_metric=measure_name,
+                incrementing_score=incrementing_score,
             )
 
             if best is None or split_score > best.score:
@@ -275,6 +278,7 @@ def calc_leaf_weight_and_split_score(
     growth_params: utils.TreeGrowthParameters,
     g: np.ndarray,
     h: np.ndarray,
+    incrementing_score: scoring.IncrementingScore = None,
 ) -> T.Tuple[float]:
     leaf_weight = leafweights.calc_leaf_weight(
         y, measure_name, growth_params, g=g, h=h
@@ -288,6 +292,7 @@ def calc_leaf_weight_and_split_score(
         h=h,
         growth_params=growth_params,
         score_metric=measure_name,
+        incrementing_score=incrementing_score,
     )
 
     return leaf_weight, score
@@ -319,6 +324,7 @@ def grow_tree(
     g: np.ndarray = None,
     h: np.ndarray = None,
     random_state: int = 42,
+    incrementing_score: scoring.IncrementingScore = None,
     **kwargs,
 ) -> Node:
     """Implementation of the Classification And Regression Tree (CART) algorithm
@@ -361,7 +367,12 @@ def grow_tree(
 
     # compute leaf weight (for prediction) and node score (for split gain check)
     leaf_weight, score = calc_leaf_weight_and_split_score(
-        y, measure_name, growth_params, g, h
+        y,
+        measure_name,
+        growth_params,
+        g,
+        h,
+        incrementing_score=incrementing_score,
     )
 
     if is_baselevel:  # end of the line buddy
@@ -377,7 +388,14 @@ def grow_tree(
     rng = np.random.RandomState(random_state)
 
     best = find_best_split(
-        X, y, measure_name, g=g, h=h, growth_params=growth_params, rng=rng
+        X,
+        y,
+        measure_name,
+        g=g,
+        h=h,
+        growth_params=growth_params,
+        rng=rng,
+        incrementing_score=incrementing_score,
     )
 
     # check if improvement due to split is below minimum requirement
@@ -421,6 +439,7 @@ def grow_tree(
         g=_g,
         h=_h,
         random_state=random_state_left,
+        incrementing_score=incrementing_score,
     )
 
     # descend right
@@ -435,6 +454,7 @@ def grow_tree(
         g=_g,
         h=_h,
         random_state=random_state_right,
+        incrementing_score=incrementing_score,
     )
 
     return new_node

@@ -469,3 +469,29 @@ class TestSplitScoreMetrics:
         )
 
         assert score == score_exp
+
+    def test_incrementing(self):
+        incrementing_score = scoring.IncrementingScore()
+        score_metric = scoring.SplitScoreMetrics["incrementing"]
+
+        # line to test
+        score = scoring.calc_score(
+            self.y,
+            self.target_groups,
+            score_metric=score_metric,
+            incrementing_score=incrementing_score,
+        )
+
+        assert score == 1
+        assert incrementing_score.score == 1
+
+        # line to test
+        score = scoring.calc_score(
+            self.y,
+            self.target_groups,
+            score_metric=score_metric,
+            incrementing_score=incrementing_score,
+        )
+
+        assert score == 2
+        assert incrementing_score.score == 2

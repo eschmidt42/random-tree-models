@@ -1,8 +1,6 @@
+# -*- coding: utf-8 -*-
 import numpy as np
-import pytest
-from sklearn.utils.estimator_checks import parametrize_with_checks
 
-import random_tree_models.decisiontree as dtree
 import random_tree_models.isolationforest as iforest
 
 rng = np.random.RandomState(42)
@@ -17,6 +15,7 @@ class TestIsolationTree:
         model.fit(self.X_inlier)
         assert hasattr(model, "tree_")
         assert hasattr(model, "growth_params_")
+        assert model.incrementing_score_.score > 0
 
     def test_predict(self):
         model = iforest.IsolationTree()
