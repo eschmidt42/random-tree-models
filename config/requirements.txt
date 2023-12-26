@@ -234,6 +234,7 @@ numpy==1.24.3
     #   contourpy
     #   matplotlib
     #   pandas
+    #   pyarrow
     #   scikit-learn
     #   scipy
     #   seaborn
@@ -272,6 +273,8 @@ platformdirs==3.5.1
     #   virtualenv
 pluggy==1.0.0
     # via pytest
+polars==0.20.0
+    # via random-tree-models (pyproject.toml)
 pre-commit==3.3.2
     # via random-tree-models (pyproject.toml)
 prometheus-client==0.17.0
@@ -289,6 +292,8 @@ ptyprocess==0.7.0
     #   terminado
 pure-eval==0.2.2
     # via stack-data
+pyarrow==14.0.2
+    # via random-tree-models (pyproject.toml)
 pycparser==2.21
     # via cffi
 pydantic==1.10.8

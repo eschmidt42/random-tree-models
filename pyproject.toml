@@ -30,7 +30,9 @@ dependencies = [
     "pandas",
     "pydantic",
     "snakeviz",
-    "maturin"
+    "maturin",
+    "polars",
+    "pyarrow",
 ]
 
 [tool.maturin]
