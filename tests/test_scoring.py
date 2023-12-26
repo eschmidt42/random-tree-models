@@ -390,37 +390,39 @@ class TestSplitScoreMetrics:
     var_exp = -0.25
 
     def test_gini(self):
-        measure = scoring.SplitScoreMetrics["gini"]
-        g = scoring.calc_score(self.y, self.target_groups, score_metric=measure)
+        measure = utils.SplitScoreMetrics["gini"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=measure)
+        g = scoring.calc_score(self.y, self.target_groups, growth_params=gp)
         assert g == self.g_exp
 
     def test_gini_rs(self):
-        measure = scoring.SplitScoreMetrics["gini_rs"]
-        g = scoring.calc_score(self.y, self.target_groups, score_metric=measure)
+        measure = utils.SplitScoreMetrics["gini_rs"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=measure)
+        g = scoring.calc_score(self.y, self.target_groups, growth_params=gp)
         assert g == self.g_exp
 
     def test_entropy(self):
-        measure = scoring.SplitScoreMetrics["entropy"]
-        h = scoring.calc_score(self.y, self.target_groups, score_metric=measure)
+        measure = utils.SplitScoreMetrics["entropy"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=measure)
+        h = scoring.calc_score(self.y, self.target_groups, growth_params=gp)
         assert h == self.h_exp
 
     def test_entropy_rs(self):
-        measure = scoring.SplitScoreMetrics["entropy_rs"]
-        h = scoring.calc_score(self.y, self.target_groups, score_metric=measure)
+        measure = utils.SplitScoreMetrics["entropy_rs"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=measure)
+        h = scoring.calc_score(self.y, self.target_groups, growth_params=gp)
         assert h == self.h_exp
 
     def test_variance(self):
-        measure = scoring.SplitScoreMetrics["variance"]
-        var = scoring.calc_score(
-            self.y, self.target_groups, score_metric=measure
-        )
+        measure = utils.SplitScoreMetrics["variance"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=measure)
+        var = scoring.calc_score(self.y, self.target_groups, growth_params=gp)
         assert var == self.var_exp
 
     def test_friedman_binary_classification(self):
-        measure = scoring.SplitScoreMetrics["friedman_binary_classification"]
-        var = scoring.calc_score(
-            self.y, self.target_groups, score_metric=measure
-        )
+        measure = utils.SplitScoreMetrics["friedman_binary_classification"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=measure)
+        var = scoring.calc_score(self.y, self.target_groups, growth_params=gp)
         assert var == self.var_exp
 
     @pytest.mark.parametrize(
@@ -472,13 +474,14 @@ class TestSplitScoreMetrics:
 
     def test_incrementing(self):
         incrementing_score = scoring.IncrementingScore()
-        score_metric = scoring.SplitScoreMetrics["incrementing"]
+        score_metric = utils.SplitScoreMetrics["incrementing"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=score_metric)
 
         # line to test
         score = scoring.calc_score(
             self.y,
             self.target_groups,
-            score_metric=score_metric,
+            growth_params=gp,
             incrementing_score=incrementing_score,
         )
 
@@ -489,7 +492,7 @@ class TestSplitScoreMetrics:
         score = scoring.calc_score(
             self.y,
             self.target_groups,
-            score_metric=score_metric,
+            growth_params=gp,
             incrementing_score=incrementing_score,
         )
 

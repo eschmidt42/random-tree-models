@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import types
 from unittest.mock import patch
 
@@ -8,7 +9,6 @@ from scipy import stats
 from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.decisiontree as dtree
-import random_tree_models.scoring as scoring
 import random_tree_models.utils as utils
 
 # first value in each tuple is the value to test and the second is the flag indicating if this should work
@@ -585,13 +585,15 @@ class Test_find_best_split:
         h: np.ndarray,
     ):
         is_homogenous = len(np.unique(y)) == 1
-        grow_params = utils.TreeGrowthParameters(max_depth=2)
+        grow_params = utils.TreeGrowthParameters(
+            max_depth=2,
+            split_score_metric=utils.SplitScoreMetrics[measure_name],
+        )
         try:
             # line to test
             best = dtree.find_best_split(
                 self.X_1D,
                 y,
-                measure_name=scoring.SplitScoreMetrics[measure_name],
                 g=g,
                 h=h,
                 growth_params=grow_params,
@@ -637,13 +639,15 @@ class Test_find_best_split:
         h: np.ndarray,
     ):
         is_homogenous = len(np.unique(y)) == 1
-        grow_params = utils.TreeGrowthParameters(max_depth=2)
+        grow_params = utils.TreeGrowthParameters(
+            max_depth=2,
+            split_score_metric=utils.SplitScoreMetrics[measure_name],
+        )
         try:
             # line to test
             best = dtree.find_best_split(
                 self.X_1D_missing,
                 y,
-                measure_name=scoring.SplitScoreMetrics[measure_name],
                 g=g,
                 h=h,
                 growth_params=grow_params,
@@ -695,7 +699,7 @@ class Test_find_best_split:
             best = dtree.find_best_split(
                 self.X_2D,
                 y,
-                scoring.SplitScoreMetrics[measure_name],
+                utils.SplitScoreMetrics[measure_name],
                 g=g,
                 h=h,
                 growth_params=growth_params,
@@ -748,7 +752,7 @@ class Test_find_best_split:
             best = dtree.find_best_split(
                 self.X_2D_missing,
                 y,
-                scoring.SplitScoreMetrics[measure_name],
+                utils.SplitScoreMetrics[measure_name],
                 g=g,
                 h=h,
                 growth_params=growth_params,
@@ -856,21 +860,39 @@ def test_check_if_split_sensible(
 
 # write tests for calc_leaf_weight_and_split_score
 @pytest.mark.parametrize(
-    "y,measure_name,growth_params,g,h",
+    "y,growth_params,g,h",
     [
-        (y, measure_name, growth_params, g, h)
+        (y, growth_params, g, h)
         for y in [
             np.array([True, True, False]),
             np.array([True, True, True]),
             np.array([False, False, False]),
         ]
-        for measure_name in [
-            scoring.SplitScoreMetrics.gini,
-            scoring.SplitScoreMetrics.entropy,
-        ]
         for growth_params in [
-            utils.TreeGrowthParameters(max_depth=2),
-            utils.TreeGrowthParameters(max_depth=2, min_improvement=0.2),
+            utils.TreeGrowthParameters(
+                max_depth=2, split_score_metric=utils.SplitScoreMetrics.gini
+            ),
+            utils.TreeGrowthParameters(
+                max_depth=2, split_score_metric=utils.SplitScoreMetrics.entropy
+            ),
+            utils.TreeGrowthParameters(
+                max_depth=2, split_score_metric=utils.SplitScoreMetrics.variance
+            ),
+            utils.TreeGrowthParameters(
+                max_depth=2,
+                min_improvement=0.2,
+                split_score_metric=utils.SplitScoreMetrics.gini,
+            ),
+            utils.TreeGrowthParameters(
+                max_depth=2,
+                min_improvement=0.2,
+                split_score_metric=utils.SplitScoreMetrics.entropy,
+            ),
+            utils.TreeGrowthParameters(
+                max_depth=2,
+                min_improvement=0.2,
+                split_score_metric=utils.SplitScoreMetrics.variance,
+            ),
         ]
         for g in [np.array([1, 2, 3])]
         for h in [np.array([4, 5, 6])]
@@ -878,15 +900,12 @@ def test_check_if_split_sensible(
 )
 def test_calc_leaf_weight_and_split_score(
     y: np.ndarray,
-    measure_name: str,
     growth_params: utils.TreeGrowthParameters,
     g: np.ndarray,
     h: np.ndarray,
 ):
     # line to test
-    _, _ = dtree.calc_leaf_weight_and_split_score(
-        y, measure_name, growth_params, g, h
-    )
+    _, _ = dtree.calc_leaf_weight_and_split_score(y, growth_params, g, h)
 
 
 @pytest.mark.parametrize("go_left", [True, False])
@@ -928,12 +947,14 @@ class Test_grow_tree:
     X = np.array([[1], [2], [3]])
     y = np.array([True, True, False])
     target_groups = np.array([True, True, False])
-    measure_name = scoring.SplitScoreMetrics["gini"]
+    measure_name = utils.SplitScoreMetrics["gini"]
     depth_dummy = 0
 
     def test_baselevel(self):
         # test returned leaf node
-        growth_params = utils.TreeGrowthParameters(max_depth=2)
+        growth_params = utils.TreeGrowthParameters(
+            max_depth=2, split_score_metric=self.measure_name
+        )
         parent_node = None
         is_baselevel = True
         reason = "very custom leaf node comment"
@@ -945,7 +966,6 @@ class Test_grow_tree:
             leaf_node = dtree.grow_tree(
                 self.X,
                 self.y,
-                self.measure_name,
                 parent_node=parent_node,
                 depth=self.depth_dummy,
                 growth_params=growth_params,
@@ -958,7 +978,9 @@ class Test_grow_tree:
     def test_split_improvement_insufficient(self):
         # test split improvement below minimum
         growth_params = utils.TreeGrowthParameters(
-            max_depth=2, min_improvement=0.2
+            max_depth=2,
+            min_improvement=0.2,
+            split_score_metric=self.measure_name,
         )
         parent_score = -1.0
         new_score = -0.9
@@ -997,7 +1019,6 @@ class Test_grow_tree:
             node = dtree.grow_tree(
                 self.X,
                 self.y,
-                self.measure_name,
                 parent_node=parent_node,
                 depth=self.depth_dummy,
                 growth_params=growth_params,
@@ -1012,7 +1033,9 @@ class Test_grow_tree:
     def test_split_improvement_sufficient(self):
         # test split improvement above minumum, leading to two leaf nodes
         growth_params = utils.TreeGrowthParameters(
-            max_depth=2, min_improvement=0.0
+            max_depth=2,
+            split_score_metric=self.measure_name,
+            min_improvement=0.0,
         )
         parent_score = -1.0
         new_score = -0.9
@@ -1054,7 +1077,6 @@ class Test_grow_tree:
             tree = dtree.grow_tree(
                 self.X,
                 self.y,
-                self.measure_name,
                 parent_node=parent_node,
                 depth=self.depth_dummy,
                 growth_params=growth_params,

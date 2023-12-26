@@ -67,7 +67,6 @@ class IsolationTree(dtree.DecisionTreeTemplate, base.OutlierMixin):
         self.tree_ = dtree.grow_tree(
             _X,
             _y,
-            measure_name=self.measure_name_enum_,
             growth_params=self.growth_params_,
             random_state=self.random_state,
             incrementing_score=self.incrementing_score_,

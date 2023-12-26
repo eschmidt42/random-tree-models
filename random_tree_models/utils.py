@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import logging
 from enum import Enum
 
@@ -63,10 +64,22 @@ class ColumnSelectionParameters:
     n_trials: StrictInt = None
 
 
+class SplitScoreMetrics(Enum):
+    variance = "variance"
+    entropy = "entropy"
+    entropy_rs = "entropy_rs"
+    gini = "gini"
+    gini_rs = "gini_rs"
+    friedman_binary_classification = "friedman_binary_classification"
+    xgboost = "xgboost"
+    incrementing = "incrementing"
+
+
 @dataclass
 class TreeGrowthParameters:
     max_depth: StrictInt
     min_improvement: StrictFloat = 0.0
+    split_score_metric: SplitScoreMetrics = SplitScoreMetrics.variance
     # xgboost lambda - multiplied with sum of squares of leaf weights
     # see Chen et al. 2016 equation 2
     lam: StrictFloat = 0.0

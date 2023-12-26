@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 
-import random_tree_models.scoring as scoring
 import random_tree_models.utils as utils
 
 
@@ -32,7 +31,6 @@ def leaf_weight_xgboost(
 
 def calc_leaf_weight(
     y: np.ndarray,
-    measure_name: scoring.SplitScoreMetrics,
     growth_params: utils.TreeGrowthParameters,
     g: np.ndarray = None,
     h: np.ndarray = None,
@@ -45,23 +43,25 @@ def calc_leaf_weight(
     if len(y) == 0:
         return None
 
+    measure_name = growth_params.split_score_metric
+
     match measure_name:
         case (
-            scoring.SplitScoreMetrics.variance
-            | scoring.SplitScoreMetrics.entropy
-            | scoring.SplitScoreMetrics.entropy_rs
-            | scoring.SplitScoreMetrics.gini
-            | scoring.SplitScoreMetrics.gini_rs
-            | scoring.SplitScoreMetrics.incrementing
+            utils.SplitScoreMetrics.variance
+            | utils.SplitScoreMetrics.entropy
+            | utils.SplitScoreMetrics.entropy_rs
+            | utils.SplitScoreMetrics.gini
+            | utils.SplitScoreMetrics.gini_rs
+            | utils.SplitScoreMetrics.incrementing
         ):
             leaf_weight = leaf_weight_mean(y)
-        case scoring.SplitScoreMetrics.friedman_binary_classification:
+        case utils.SplitScoreMetrics.friedman_binary_classification:
             leaf_weight = leaf_weight_binary_classification_friedman2001(g)
-        case scoring.SplitScoreMetrics.xgboost:
+        case utils.SplitScoreMetrics.xgboost:
             leaf_weight = leaf_weight_xgboost(growth_params, g, h)
         case _:
             raise KeyError(
-                f"Unknown measure_name: {measure_name}, expected one of {', '.join(list(scoring.SplitScoreMetrics.__members__.keys()))}"
+                f"Unknown measure_name: {measure_name}, expected one of {', '.join(list(utils.SplitScoreMetrics.__members__.keys()))}"
             )
 
     return leaf_weight

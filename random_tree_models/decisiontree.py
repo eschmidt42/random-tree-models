@@ -200,7 +200,6 @@ def get_column(
 def find_best_split(
     X: np.ndarray,
     y: np.ndarray,
-    measure_name: scoring.SplitScoreMetrics,
     yhat: np.ndarray = None,
     g: np.ndarray = None,
     h: np.ndarray = None,
@@ -233,7 +232,6 @@ def find_best_split(
                 g=g,
                 h=h,
                 growth_params=growth_params,
-                score_metric=measure_name,
                 incrementing_score=incrementing_score,
             )
 
@@ -274,15 +272,12 @@ def check_if_split_sensible(
 
 def calc_leaf_weight_and_split_score(
     y: np.ndarray,
-    measure_name: scoring.SplitScoreMetrics,
     growth_params: utils.TreeGrowthParameters,
     g: np.ndarray,
     h: np.ndarray,
     incrementing_score: scoring.IncrementingScore = None,
 ) -> T.Tuple[float]:
-    leaf_weight = leafweights.calc_leaf_weight(
-        y, measure_name, growth_params, g=g, h=h
-    )
+    leaf_weight = leafweights.calc_leaf_weight(y, growth_params, g=g, h=h)
 
     # yhat = leaf_weight * np.ones_like(y)
     score = scoring.calc_score(
@@ -291,7 +286,6 @@ def calc_leaf_weight_and_split_score(
         g=g,
         h=h,
         growth_params=growth_params,
-        score_metric=measure_name,
         incrementing_score=incrementing_score,
     )
 
@@ -317,7 +311,6 @@ def select_arrays_for_child_node(
 def grow_tree(
     X: np.ndarray,
     y: np.ndarray,
-    measure_name: scoring.SplitScoreMetrics,
     parent_node: Node = None,
     depth: int = 0,
     growth_params: utils.TreeGrowthParameters = None,
@@ -332,7 +325,7 @@ def grow_tree(
     Args:
         X (np.ndarray): Input feature values to do thresholding on.
         y (np.ndarray): Target values.
-        measure_name (str): Values indicating which functions in scoring.SplitScoreMetrics and leafweights.LeafWeightSchemes to call.
+        measure_name (str): Values indicating which functions in utils.SplitScoreMetrics and leafweights.LeafWeightSchemes to call.
         parent_node (Node, optional): Parent node in tree. Defaults to None.
         depth (int, optional): Current tree depth. Defaults to 0.
         growth_params (utils.TreeGrowthParameters, optional): Parameters controlling tree growth. Defaults to None.
@@ -368,17 +361,18 @@ def grow_tree(
     # compute leaf weight (for prediction) and node score (for split gain check)
     leaf_weight, score = calc_leaf_weight_and_split_score(
         y,
-        measure_name,
         growth_params,
         g,
         h,
         incrementing_score=incrementing_score,
     )
 
+    measure_name = growth_params.split_score_metric.name
+
     if is_baselevel:  # end of the line buddy
         return Node(
             prediction=leaf_weight,
-            measure=SplitScore(measure_name.name, score=score),
+            measure=SplitScore(measure_name, score=score),
             n_obs=n_obs,
             reason=reason,
             depth=depth,
@@ -390,7 +384,6 @@ def grow_tree(
     best = find_best_split(
         X,
         y,
-        measure_name,
         g=g,
         h=h,
         growth_params=growth_params,
@@ -407,7 +400,7 @@ def grow_tree(
         reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=} or all data points assigned to one side (is left {best.target_groups.mean()=:.2%})"
         leaf_node = Node(
             prediction=leaf_weight,
-            measure=SplitScore(measure_name.name, score=score),
+            measure=SplitScore(measure_name, score=score),
             n_obs=n_obs,
             reason=reason,
             depth=depth,
@@ -420,7 +413,7 @@ def grow_tree(
         threshold=best.threshold,
         prediction=leaf_weight,
         default_is_left=best.default_is_left,
-        measure=SplitScore(measure_name.name, best.score),
+        measure=SplitScore(measure_name, best.score),
         n_obs=n_obs,
         reason="",
         depth=depth,
@@ -432,7 +425,6 @@ def grow_tree(
     new_node.left = grow_tree(
         _X,
         _y,
-        measure_name=measure_name,
         parent_node=new_node,
         depth=depth + 1,
         growth_params=growth_params,
@@ -447,7 +439,6 @@ def grow_tree(
     new_node.right = grow_tree(
         _X,
         _y,
-        measure_name=measure_name,
         parent_node=new_node,
         depth=depth + 1,
         growth_params=growth_params,
@@ -534,36 +525,36 @@ class DecisionTreeTemplate(base.BaseEstimator):
         self.column_method = column_method
         self.n_columns_to_try = n_columns_to_try
 
-    def _sanity_check_measure_name(self):
+    def _sanity_check_measure_name(self) -> utils.SplitScoreMetrics:
         try:
-            self.measure_name_enum_ = scoring.SplitScoreMetrics[
-                self.measure_name
-            ]
+            return utils.SplitScoreMetrics[self.measure_name]
         except KeyError as ex:
             raise KeyError(
                 f"Unknown measure_name: {self.measure_name}. "
-                f"Valid options: {', '.join(list(scoring.SplitScoreMetrics.__members__.keys()))}. {ex=}"
+                f"Valid options: {', '.join(list(utils.SplitScoreMetrics.__members__.keys()))}. {ex=}"
             )
 
     def _organize_growth_parameters(self):
-        self._sanity_check_measure_name()
+        threshold_params = utils.ThresholdSelectionParameters(
+            method=self.threshold_method,
+            quantile=self.threshold_quantile,
+            n_thresholds=self.n_thresholds,
+            random_state=int(self.random_state),
+        )
+        column_params = utils.ColumnSelectionParameters(
+            method=self.column_method,
+            n_trials=self.n_columns_to_try,
+        )
         self.growth_params_ = utils.TreeGrowthParameters(
             max_depth=self.max_depth,
+            split_score_metric=self._sanity_check_measure_name(),
             min_improvement=self.min_improvement,
             lam=-abs(self.lam),
             frac_subsamples=float(self.frac_subsamples),
             frac_features=float(self.frac_features),
             random_state=int(self.random_state),
-            threshold_params=utils.ThresholdSelectionParameters(
-                method=self.threshold_method,
-                quantile=self.threshold_quantile,
-                n_thresholds=self.n_thresholds,
-                random_state=int(self.random_state),
-            ),
-            column_params=utils.ColumnSelectionParameters(
-                method=self.column_method,
-                n_trials=self.n_columns_to_try,
-            ),
+            threshold_params=threshold_params,
+            column_params=column_params,
         )
 
     def _select_samples_and_features(
@@ -643,7 +634,6 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
         self.tree_ = grow_tree(
             _X,
             _y,
-            measure_name=self.measure_name_enum_,
             growth_params=self.growth_params_,
             random_state=self.random_state,
             **kwargs,
@@ -707,7 +697,6 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
         self.tree_ = grow_tree(
             _X,
             _y,
-            measure_name=self.measure_name_enum_,
             growth_params=self.growth_params_,
             random_state=self.random_state,
         )

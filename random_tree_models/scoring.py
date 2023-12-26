@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-from enum import Enum
-
 import numpy as np
 
 import random_tree_models.utils as utils
@@ -206,46 +204,36 @@ class IncrementingScore:
         return self.score
 
 
-class SplitScoreMetrics(Enum):
-    variance = "variance"
-    entropy = "entropy"
-    entropy_rs = "entropy_rs"
-    gini = "gini"
-    gini_rs = "gini_rs"
-    friedman_binary_classification = "friedman_binary_classification"
-    xgboost = "xgboost"
-    incrementing = "incrementing"
-
-
 def calc_score(
     y: np.ndarray,
     target_groups: np.ndarray,
     g: np.ndarray = None,
     h: np.ndarray = None,
     growth_params: utils.TreeGrowthParameters = None,
-    score_metric: SplitScoreMetrics = SplitScoreMetrics.variance,
     incrementing_score: IncrementingScore = None,
 ) -> float:
-    match score_metric:
-        case SplitScoreMetrics.variance:
+    measure_name = growth_params.split_score_metric
+
+    match measure_name:
+        case utils.SplitScoreMetrics.variance:
             return calc_variance(y, target_groups)
-        case SplitScoreMetrics.entropy:
+        case utils.SplitScoreMetrics.entropy:
             return calc_entropy(y, target_groups)
-        case SplitScoreMetrics.entropy_rs:
+        case utils.SplitScoreMetrics.entropy_rs:
             return calc_entropy_rs(y, target_groups)
-        case SplitScoreMetrics.gini:
+        case utils.SplitScoreMetrics.gini:
             return calc_gini_impurity(y, target_groups)
-        case SplitScoreMetrics.gini_rs:
+        case utils.SplitScoreMetrics.gini_rs:
             return calc_gini_impurity_rs(y, target_groups)
-        case SplitScoreMetrics.friedman_binary_classification:
+        case utils.SplitScoreMetrics.friedman_binary_classification:
             return calc_variance(y, target_groups)
-        case SplitScoreMetrics.xgboost:
+        case utils.SplitScoreMetrics.xgboost:
             return calc_xgboost_split_score(target_groups, g, h, growth_params)
-        case SplitScoreMetrics.incrementing:
+        case utils.SplitScoreMetrics.incrementing:
             if incrementing_score is None:
                 raise ValueError(
-                    f"{incrementing_score=} must be provided as an instance of scoring.IncrementingScore {score_metric=}"
+                    f"{incrementing_score=} must be provided as an instance of scoring.IncrementingScore {measure_name=}"
                 )
             return incrementing_score.update()
         case _:
-            raise ValueError(f"{score_metric=} not supported")
+            raise ValueError(f"{measure_name=} not supported")
