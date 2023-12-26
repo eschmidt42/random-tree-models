@@ -325,7 +325,6 @@ def grow_tree(
     Args:
         X (np.ndarray): Input feature values to do thresholding on.
         y (np.ndarray): Target values.
-        measure_name (str): Values indicating which functions in utils.SplitScoreMetrics and leafweights.LeafWeightSchemes to call.
         parent_node (Node, optional): Parent node in tree. Defaults to None.
         depth (int, optional): Current tree depth. Defaults to 0.
         growth_params (utils.TreeGrowthParameters, optional): Parameters controlling tree growth. Defaults to None.
@@ -339,7 +338,7 @@ def grow_tree(
         Node: Tree node with leaf weight, node score and potential child nodes.
 
     Note:
-    Currently measure_name controls how the split score and the leaf weights are computed.
+    Currently growth_params.split_score_name controls how the split score and the leaf weights are computed.
 
     But only the decision tree algorithm directly uses y for that and can predict y using the leaf weight values directly.
 
