@@ -206,19 +206,15 @@ class IncrementingScore:
         return self.score
 
 
-SplitScoreMetrics = Enum(
-    "SplitScoreMetrics",
-    [
-        "variance",
-        "entropy",
-        "entropy_rs",
-        "gini",
-        "gini_rs",
-        "friedman_binary_classification",
-        "xgboost",
-        "incrementing",
-    ],
-)
+class SplitScoreMetrics(Enum):
+    variance = "variance"
+    entropy = "entropy"
+    entropy_rs = "entropy_rs"
+    gini = "gini"
+    gini_rs = "gini_rs"
+    friedman_binary_classification = "friedman_binary_classification"
+    xgboost = "xgboost"
+    incrementing = "incrementing"
 
 
 def calc_score(
