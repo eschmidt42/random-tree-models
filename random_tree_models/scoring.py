@@ -207,9 +207,9 @@ class IncrementingScore:
 def calc_score(
     y: np.ndarray,
     target_groups: np.ndarray,
+    growth_params: utils.TreeGrowthParameters,
     g: np.ndarray = None,
     h: np.ndarray = None,
-    growth_params: utils.TreeGrowthParameters = None,
     incrementing_score: IncrementingScore = None,
 ) -> float:
     measure_name = growth_params.split_score_metric

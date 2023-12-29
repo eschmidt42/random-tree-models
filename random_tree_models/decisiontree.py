@@ -22,6 +22,7 @@ from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 import random_tree_models.leafweights as leafweights
 import random_tree_models.scoring as scoring
 import random_tree_models.utils as utils
+import abc
 
 logger = utils.logger
 
@@ -200,10 +201,9 @@ def get_column(
 def find_best_split(
     X: np.ndarray,
     y: np.ndarray,
-    yhat: np.ndarray = None,
+    growth_params: utils.TreeGrowthParameters,
     g: np.ndarray = None,
     h: np.ndarray = None,
-    growth_params: utils.TreeGrowthParameters = None,
     rng: np.random.RandomState = np.random.RandomState(42),
     incrementing_score: scoring.IncrementingScore = None,
 ) -> BestSplit:
@@ -229,9 +229,9 @@ def find_best_split(
             split_score = scoring.calc_score(
                 y,
                 target_groups,
+                growth_params=growth_params,
                 g=g,
                 h=h,
-                growth_params=growth_params,
                 incrementing_score=incrementing_score,
             )
 
@@ -281,11 +281,11 @@ def calc_leaf_weight_and_split_score(
 
     # yhat = leaf_weight * np.ones_like(y)
     score = scoring.calc_score(
-        y,
-        np.ones_like(y, dtype=bool),
+        y=y,
+        target_groups=np.ones_like(y, dtype=bool),
+        growth_params=growth_params,
         g=g,
         h=h,
-        growth_params=growth_params,
         incrementing_score=incrementing_score,
     )
 
@@ -311,23 +311,22 @@ def select_arrays_for_child_node(
 def grow_tree(
     X: np.ndarray,
     y: np.ndarray,
+    growth_params: utils.TreeGrowthParameters,
     parent_node: Node = None,
     depth: int = 0,
-    growth_params: utils.TreeGrowthParameters = None,
     g: np.ndarray = None,
     h: np.ndarray = None,
     random_state: int = 42,
     incrementing_score: scoring.IncrementingScore = None,
-    **kwargs,
 ) -> Node:
     """Implementation of the Classification And Regression Tree (CART) algorithm
 
     Args:
         X (np.ndarray): Input feature values to do thresholding on.
         y (np.ndarray): Target values.
+        growth_params (utils.TreeGrowthParameters, optional): Parameters controlling tree growth.
         parent_node (Node, optional): Parent node in tree. Defaults to None.
         depth (int, optional): Current tree depth. Defaults to 0.
-        growth_params (utils.TreeGrowthParameters, optional): Parameters controlling tree growth. Defaults to None.
         g (np.ndarray, optional): Boosting and loss specific precomputed 1st order derivative dloss/dyhat. Defaults to None.
         h (np.ndarray, optional): Boosting and loss specific precomputed 2nd order derivative d^2loss/dyhat^2. Defaults to None.
 
@@ -424,9 +423,9 @@ def grow_tree(
     new_node.left = grow_tree(
         _X,
         _y,
+        growth_params=growth_params,
         parent_node=new_node,
         depth=depth + 1,
-        growth_params=growth_params,
         g=_g,
         h=_h,
         random_state=random_state_left,
@@ -438,9 +437,9 @@ def grow_tree(
     new_node.right = grow_tree(
         _X,
         _y,
+        growth_params=growth_params,
         parent_node=new_node,
         depth=depth + 1,
-        growth_params=growth_params,
         g=_g,
         h=_h,
         random_state=random_state_right,
@@ -490,7 +489,7 @@ def predict_with_tree(tree: Node, X: np.ndarray) -> np.ndarray:
     return predictions
 
 
-class DecisionTreeTemplate(base.BaseEstimator):
+class DecisionTreeTemplate(abc.ABC, base.BaseEstimator):
     """Template for DecisionTree classes
 
     Based on: https://scikit-learn.org/stable/developers/develop.html#rolling-your-own-estimator
@@ -592,15 +591,17 @@ class DecisionTreeTemplate(base.BaseEstimator):
     ) -> np.ndarray:
         return X[:, ix_features]
 
+    @abc.abstractmethod
     def fit(
         self,
         X: T.Union[pd.DataFrame, np.ndarray],
         y: T.Union[pd.Series, np.ndarray],
     ) -> "DecisionTreeTemplate":
-        raise NotImplementedError()
+        ...
 
+    @abc.abstractmethod
     def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
-        raise NotImplementedError()
+        ...
 
 
 class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):

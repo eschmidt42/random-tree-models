@@ -693,16 +693,18 @@ class Test_find_best_split:
         h: np.ndarray,
     ):
         is_homogenous = len(np.unique(y)) == 1
-        growth_params = utils.TreeGrowthParameters(max_depth=2)
+        growth_params = utils.TreeGrowthParameters(
+            max_depth=2,
+            split_score_metric=utils.SplitScoreMetrics[measure_name],
+        )
         try:
             # line to test
             best = dtree.find_best_split(
-                self.X_2D,
-                y,
-                utils.SplitScoreMetrics[measure_name],
+                X=self.X_2D,
+                y=y,
+                growth_params=growth_params,
                 g=g,
                 h=h,
-                growth_params=growth_params,
             )
         except ValueError as ex:
             if is_homogenous:
@@ -746,16 +748,18 @@ class Test_find_best_split:
         h: np.ndarray,
     ):
         is_homogenous = len(np.unique(y)) == 1
-        growth_params = utils.TreeGrowthParameters(max_depth=2)
+        growth_params = utils.TreeGrowthParameters(
+            max_depth=2,
+            split_score_metric=utils.SplitScoreMetrics[measure_name],
+        )
         try:
             # line to test
             best = dtree.find_best_split(
-                self.X_2D_missing,
-                y,
-                utils.SplitScoreMetrics[measure_name],
+                X=self.X_2D_missing,
+                y=y,
+                growth_params=growth_params,
                 g=g,
                 h=h,
-                growth_params=growth_params,
             )
         except ValueError as ex:
             if is_homogenous:
@@ -966,9 +970,9 @@ class Test_grow_tree:
             leaf_node = dtree.grow_tree(
                 self.X,
                 self.y,
+                growth_params=growth_params,
                 parent_node=parent_node,
                 depth=self.depth_dummy,
-                growth_params=growth_params,
             )
 
             mock_check_is_baselevel.assert_called_once()
@@ -1019,9 +1023,9 @@ class Test_grow_tree:
             node = dtree.grow_tree(
                 self.X,
                 self.y,
+                growth_params=growth_params,
                 parent_node=parent_node,
                 depth=self.depth_dummy,
-                growth_params=growth_params,
             )
 
             mock_check_is_baselevel.assert_called_once()
@@ -1077,9 +1081,9 @@ class Test_grow_tree:
             tree = dtree.grow_tree(
                 self.X,
                 self.y,
+                growth_params=growth_params,
                 parent_node=parent_node,
                 depth=self.depth_dummy,
-                growth_params=growth_params,
             )
 
             assert mock_check_is_baselevel.call_count == 3
@@ -1168,8 +1172,18 @@ def test_predict_with_tree():
     assert np.allclose(predictions, np.arange(0, 4, 1))
 
 
+class DecisionTreeTemplateTestClass(dtree.DecisionTreeTemplate):
+    "Class to test abstract class DecisionTreeTemplate"
+
+    def fit(self):
+        pass
+
+    def predict(self):
+        pass
+
+
 class TestDecisionTreeTemplate:
-    model = dtree.DecisionTreeTemplate(measure_name="gini")
+    model = DecisionTreeTemplateTestClass(measure_name="gini")
     X = np.random.normal(size=(100, 10))
     y = np.random.normal(size=(100,))
 
@@ -1181,18 +1195,6 @@ class TestDecisionTreeTemplate:
 
         self.model._organize_growth_parameters()
         assert isinstance(self.model.growth_params_, utils.TreeGrowthParameters)
-
-    def test_fit(self):
-        try:
-            self.model.fit(None, None)
-        except NotImplementedError:
-            pytest.xfail("DecisionTreeTemplate.fit expectedly refused call")
-
-    def test_predict(self):
-        try:
-            self.model.predict(None)
-        except NotImplementedError:
-            pytest.xfail("DecisionTreeTemplate.predict expectedly refused call")
 
     def test_select_samples_and_features_no_sampling(self):
         self.model.frac_features = 1.0
