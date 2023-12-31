@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 import pytest
 
@@ -359,11 +360,11 @@ def test_calc_xgboost_split_score(
     g: np.ndarray, h: np.ndarray, target_groups: np.ndarray, score_exp: float
 ):
     growth_params = utils.TreeGrowthParameters(max_depth=2, lam=0.0)
-    y = None
+
     try:
         # line to test
         score = scoring.calc_xgboost_split_score(
-            y, target_groups, g, h, growth_params
+            target_groups, g, h, growth_params
         )
     except ValueError as ex:
         if score_exp is None:
@@ -380,6 +381,7 @@ def test_calc_xgboost_split_score(
 
 class TestSplitScoreMetrics:
     "Redudancy test - calling calc_xgboost_split_score etc via SplitScoreMetrics needs to yield the same values as in the test above."
+
     y = np.array([1, 1, 2, 2])
     target_groups = np.array([False, True, False, True])
 
@@ -388,29 +390,39 @@ class TestSplitScoreMetrics:
     var_exp = -0.25
 
     def test_gini(self):
-        g = scoring.SplitScoreMetrics["gini"](self.y, self.target_groups)
+        measure = utils.SplitScoreMetrics["gini"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=measure)
+        g = scoring.calc_score(self.y, self.target_groups, growth_params=gp)
         assert g == self.g_exp
 
     def test_gini_rs(self):
-        g = scoring.SplitScoreMetrics["gini_rs"](self.y, self.target_groups)
+        measure = utils.SplitScoreMetrics["gini_rs"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=measure)
+        g = scoring.calc_score(self.y, self.target_groups, growth_params=gp)
         assert g == self.g_exp
 
     def test_entropy(self):
-        h = scoring.SplitScoreMetrics["entropy"](self.y, self.target_groups)
+        measure = utils.SplitScoreMetrics["entropy"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=measure)
+        h = scoring.calc_score(self.y, self.target_groups, growth_params=gp)
         assert h == self.h_exp
 
-    def test_entropy(self):
-        h = scoring.SplitScoreMetrics["entropy_rs"](self.y, self.target_groups)
+    def test_entropy_rs(self):
+        measure = utils.SplitScoreMetrics["entropy_rs"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=measure)
+        h = scoring.calc_score(self.y, self.target_groups, growth_params=gp)
         assert h == self.h_exp
 
     def test_variance(self):
-        var = scoring.SplitScoreMetrics["variance"](self.y, self.target_groups)
+        measure = utils.SplitScoreMetrics["variance"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=measure)
+        var = scoring.calc_score(self.y, self.target_groups, growth_params=gp)
         assert var == self.var_exp
 
     def test_friedman_binary_classification(self):
-        var = scoring.SplitScoreMetrics["friedman_binary_classification"](
-            self.y, self.target_groups
-        )
+        measure = utils.SplitScoreMetrics["friedman_binary_classification"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=measure)
+        var = scoring.calc_score(self.y, self.target_groups, growth_params=gp)
         assert var == self.var_exp
 
     @pytest.mark.parametrize(
@@ -452,11 +464,37 @@ class TestSplitScoreMetrics:
         score_exp: float,
     ):
         growth_params = utils.TreeGrowthParameters(max_depth=2, lam=0.0)
-        y = None
 
         # line to test
         score = scoring.calc_xgboost_split_score(
-            y, target_groups, g, h, growth_params
+            target_groups, g, h, growth_params
         )
 
         assert score == score_exp
+
+    def test_incrementing(self):
+        incrementing_score = scoring.IncrementingScore()
+        score_metric = utils.SplitScoreMetrics["incrementing"]
+        gp = utils.TreeGrowthParameters(1, split_score_metric=score_metric)
+
+        # line to test
+        score = scoring.calc_score(
+            self.y,
+            self.target_groups,
+            growth_params=gp,
+            incrementing_score=incrementing_score,
+        )
+
+        assert score == 1
+        assert incrementing_score.score == 1
+
+        # line to test
+        score = scoring.calc_score(
+            self.y,
+            self.target_groups,
+            growth_params=gp,
+            incrementing_score=incrementing_score,
+        )
+
+        assert score == 2
+        assert incrementing_score.score == 2
