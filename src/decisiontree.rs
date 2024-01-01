@@ -112,6 +112,18 @@ pub fn check_is_baselevel(
     }
 }
 
+pub fn calc_leaf_weight(
+    y: &Series,
+    growth_params: &TreeGrowthParameters,
+    g: Option<&Series>,
+    h: Option<&Series>,
+) -> f64 {
+
+    let leaf_weight = y.mean().unwrap();
+
+    leaf_weight
+}
+
 pub fn calc_leaf_weight_and_split_score(
     y: &Series,
     growth_params: &TreeGrowthParameters,
@@ -120,7 +132,7 @@ pub fn calc_leaf_weight_and_split_score(
     incrementing_score: Option<f64>,
 ) -> (f64, SplitScore) {
 
-    let leaf_weight = 1.0;
+    let leaf_weight = calc_leaf_weight(y, growth_params, g, h);
 
     let score = SplitScore::new("score".to_string(), 0.5);
 
@@ -403,7 +415,7 @@ mod tests {
             Series::new("c", &[1, 2, 3]),
         ])
         .unwrap();
-        let y = Series::new("y", &[1, 2, 3]);
+        let y = Series::new("y", &[1, 1, 2]);
         let growth_params = TreeGrowthParameters { max_depth: Some(1) };
 
         let tree = grow_tree(&df, &y, &growth_params, None, 0);
@@ -423,7 +435,7 @@ mod tests {
             Series::new("c", &[1, 2, 3]),
         ])
         .unwrap();
-        let y = Series::new("y", &[1, 2, 3]);
+        let y = Series::new("y", &[1, 1, 1]);
         let growth_params = TreeGrowthParameters { max_depth: Some(2) };
 
         let tree = grow_tree(&df, &y, &growth_params, None, 0);
@@ -442,7 +454,7 @@ mod tests {
             Series::new("c", &[1, 2, 3]),
         ])
         .unwrap();
-        let y = Series::new("y", &[1, 2, 3]);
+        let y = Series::new("y", &[1, 1, 1]);
         let growth_params = TreeGrowthParameters { max_depth: Some(2) };
         let tree = grow_tree(&df, &y, &growth_params, None, 0);
 
@@ -459,7 +471,7 @@ mod tests {
             Series::new("c", &[1, 2, 3]),
         ])
         .unwrap();
-        let y = Series::new("y", &[1, 2, 3]);
+        let y = Series::new("y", &[1, 1, 1]);
 
         let mut dtree = DecisionTreeTemplate::new(2);
         dtree.fit(&df, &y);
