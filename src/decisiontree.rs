@@ -112,6 +112,21 @@ pub fn check_is_baselevel(
     }
 }
 
+pub fn calc_leaf_weight_and_split_score(
+    y: &Series,
+    growth_params: &TreeGrowthParameters,
+    g: Option<&Series>,
+    h: Option<&Series>,
+    incrementing_score: Option<f64>,
+) -> (f64, SplitScore) {
+
+    let leaf_weight = 1.0;
+
+    let score = SplitScore::new("score".to_string(), 0.5);
+
+    (leaf_weight, score)
+}
+
 // Inspirations:
 // * https://rusty-ferris.pages.dev/blog/binary-tree-sum-of-values/
 // * https://gist.github.com/aidanhs/5ac9088ca0f6bdd4a370
@@ -122,7 +137,7 @@ pub fn grow_tree(
     parent_node: Option<&Node>,
     depth: usize,
 ) -> Node {
-    // TODO: implement check_is_baselevel and such
+
     let n_obs = x.height();
     if n_obs == 0 {
         panic!("Something went wrong. The parent_node handed down an empty set of data points.")
@@ -145,9 +160,12 @@ pub fn grow_tree(
         return new_node;
     }
 
+    // let leaf_weight = 1.0;
+    let (leaf_weight, score) = calc_leaf_weight_and_split_score(y, growth_params, None, None, None);
+
     // find best split
     let mut rng = ChaCha20Rng::seed_from_u64(42);
-    let leaf_weight = 1.0;
+
 
     let mut new_node = Node::new(
         Some(0),
