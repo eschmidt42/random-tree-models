@@ -3,6 +3,8 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use uuid::Uuid;
 
+use crate::utils::TreeGrowthParameters;
+
 #[derive(PartialEq, Debug)]
 pub struct SplitScore {
     pub name: String,
@@ -87,17 +89,46 @@ impl Node {
         }
     }
 }
+
+pub fn check_is_baselevel(
+    y: &Series,
+    depth: usize,
+    growth_params: &TreeGrowthParameters,
+) -> (bool, String) {
+    let n_obs = y.len();
+    let n_unique = y
+        .n_unique()
+        .expect("Something went wrong. Could not get n_unique.");
+    let max_depth = growth_params.max_depth;
+
+    if max_depth.is_some() && depth >= max_depth.unwrap() {
+        return (true, "max depth reached".to_string());
+    } else if n_unique == 1 {
+        return (true, "homogenous group".to_string());
+    } else if n_obs <= 1 {
+        return (true, "<= 1 data point in group".to_string());
+    } else {
+        (false, "".to_string())
+    }
+}
+
 // Inspirations:
 // * https://rusty-ferris.pages.dev/blog/binary-tree-sum-of-values/
 // * https://gist.github.com/aidanhs/5ac9088ca0f6bdd4a370
-pub fn grow_tree(x: &DataFrame, y: &Series, parent_node: Option<&Node>, depth: usize) -> Node {
+pub fn grow_tree(
+    x: &DataFrame,
+    y: &Series,
+    growth_params: &TreeGrowthParameters,
+    parent_node: Option<&Node>,
+    depth: usize,
+) -> Node {
     // TODO: implement check_is_baselevel and such
     let n_obs = x.height();
     if n_obs == 0 {
         panic!("Something went wrong. The parent_node handed down an empty set of data points.")
     }
 
-    let is_baselevel: bool = depth == 1;
+    let (is_baselevel, reason) = check_is_baselevel(y, depth, growth_params);
     if is_baselevel {
         let new_node = Node::new(
             None,
@@ -108,7 +139,7 @@ pub fn grow_tree(x: &DataFrame, y: &Series, parent_node: Option<&Node>, depth: u
             None,
             Some(SplitScore::new("score".to_string(), 0.5)),
             10,
-            "leaf node".to_string(),
+            reason,
             0,
         );
         return new_node;
@@ -134,11 +165,11 @@ pub fn grow_tree(x: &DataFrame, y: &Series, parent_node: Option<&Node>, depth: u
     // check if improvement due to split is below minimum requirement
 
     // descend left
-    let new_left_node = grow_tree(x, y, Some(&new_node), &depth + 1); // mut new_node,
+    let new_left_node = grow_tree(x, y, growth_params, Some(&new_node), &depth + 1); // mut new_node,
     new_node.insert(new_left_node, true);
 
     // descend right
-    let new_right_node = grow_tree(x, y, Some(&new_node), depth + 1); // mut new_node,
+    let new_right_node = grow_tree(x, y, growth_params, Some(&new_node), depth + 1); // mut new_node,
     new_node.insert(new_right_node, false);
 
     return new_node;
@@ -182,20 +213,23 @@ pub fn predict_with_tree(x: &DataFrame, tree: &Node) -> Series {
 }
 
 pub struct DecisionTreeTemplate {
-    pub max_depth: usize,
+    pub growth_params: TreeGrowthParameters,
     tree: Option<Node>,
 }
 
 impl DecisionTreeTemplate {
     pub fn new(max_depth: usize) -> Self {
+        let growth_params = TreeGrowthParameters {
+            max_depth: Some(max_depth),
+        };
         DecisionTreeTemplate {
-            max_depth,
+            growth_params,
             tree: None,
         }
     }
 
     pub fn fit(&mut self, x: &DataFrame, y: &Series) {
-        self.tree = Some(grow_tree(x, y, None, 0));
+        self.tree = Some(grow_tree(x, y, &self.growth_params, None, 0));
     }
 
     pub fn predict(&self, x: &DataFrame) -> Series {
@@ -352,8 +386,9 @@ mod tests {
         ])
         .unwrap();
         let y = Series::new("y", &[1, 2, 3]);
+        let growth_params = TreeGrowthParameters { max_depth: Some(1) };
 
-        let tree = grow_tree(&df, &y, None, 0);
+        let tree = grow_tree(&df, &y, &growth_params, None, 0);
 
         assert!(tree.is_leaf() == false);
         assert_eq!(tree.left.is_some(), true);
@@ -371,8 +406,9 @@ mod tests {
         ])
         .unwrap();
         let y = Series::new("y", &[1, 2, 3]);
+        let growth_params = TreeGrowthParameters { max_depth: Some(2) };
 
-        let tree = grow_tree(&df, &y, None, 0);
+        let tree = grow_tree(&df, &y, &growth_params, None, 0);
 
         let row = df.select_at_idx(0).unwrap();
         let prediction = predict_for_row_with_tree(&row, &tree);
@@ -389,8 +425,8 @@ mod tests {
         ])
         .unwrap();
         let y = Series::new("y", &[1, 2, 3]);
-
-        let tree = grow_tree(&df, &y, None, 0);
+        let growth_params = TreeGrowthParameters { max_depth: Some(2) };
+        let tree = grow_tree(&df, &y, &growth_params, None, 0);
 
         let predictions = predict_with_tree(&df, &tree);
         assert_eq!(predictions, Series::new("predictions", &[1.0, 1.0, 1.0]));

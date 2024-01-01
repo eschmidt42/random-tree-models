@@ -1,13 +1,15 @@
+use polars::{frame::DataFrame, series::Series};
 use pyo3::prelude::*;
 mod decisiontree;
 mod scoring;
-// mod utils;
+use pyo3_polars::{PyDataFrame, PySeries};
+mod utils;
 
 #[pymodule]
 #[pyo3(name = "_rust")]
 fn random_tree_models(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     register_scoring_module(py, m)?;
-    // m.add_class::<DecisionTree>()?;
+    m.add_class::<DecisionTree>()?;
     Ok(())
 }
 
@@ -20,19 +22,35 @@ fn register_scoring_module(py: Python<'_>, parent_module: &PyModule) -> PyResult
     Ok(())
 }
 
-// #[pyclass]
-// struct DecisionTree {
-//     num: usize,
-// }
+#[pyclass]
+struct DecisionTree {
+    max_depth: usize,
+    tree_: Option<decisiontree::DecisionTreeTemplate>,
+}
 
-// #[pymethods]
-// impl DecisionTree {
-//     #[new]
-//     fn new(num: usize) -> Self {
-//         DecisionTree { num }
-//     }
+#[pymethods]
+impl DecisionTree {
+    #[new]
+    fn new(max_depth: usize) -> Self {
+        DecisionTree {
+            max_depth,
+            tree_: None,
+        }
+    }
 
-//     fn get_num(&self) -> usize {
-//         self.num
-//     }
-// }
+    fn fit(&mut self, X: PyDataFrame, y: PySeries) -> PyResult<()> {
+        let mut tree = decisiontree::DecisionTreeTemplate::new(self.max_depth);
+        let X: DataFrame = X.into();
+        let y: Series = y.into();
+        tree.fit(&X, &y);
+        self.tree_ = Some(tree);
+        Ok(())
+    }
+
+    fn predict(&self, X: PyDataFrame) -> PyResult<PySeries> {
+        let X: DataFrame = X.into();
+        let y_pred = self.tree_.as_ref().unwrap().predict(&X);
+
+        Ok(PySeries(y_pred))
+    }
+}
