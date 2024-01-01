@@ -17,17 +17,17 @@ impl SplitScore {
 
 #[derive(PartialEq, Debug)]
 pub struct Node {
-    pub array_column: usize,
-    pub threshold: f64,
-    pub prediction: f64,
-    pub default_is_left: bool,
+    pub array_column: Option<usize>,
+    pub threshold: Option<f64>,
+    pub prediction: Option<f64>,
+    pub default_is_left: Option<bool>,
 
     // descendants
     pub left: Option<Box<Node>>,
     pub right: Option<Box<Node>>,
 
     // misc
-    pub measure: SplitScore,
+    pub measure: Option<SplitScore>,
 
     pub n_obs: usize,
     pub reason: String,
@@ -37,13 +37,13 @@ pub struct Node {
 
 impl Node {
     pub fn new(
-        array_column: usize,
-        threshold: f64,
-        prediction: f64,
-        default_is_left: bool,
+        array_column: Option<usize>,
+        threshold: Option<f64>,
+        prediction: Option<f64>,
+        default_is_left: Option<bool>,
         left: Option<Box<Node>>,
         right: Option<Box<Node>>,
-        measure: SplitScore,
+        measure: Option<SplitScore>,
         n_obs: usize,
         reason: String,
         depth: usize,
@@ -100,13 +100,13 @@ pub fn grow_tree(x: &DataFrame, y: &Series, parent_node: Option<&Node>, depth: u
     let is_baselevel: bool = depth == 1;
     if is_baselevel {
         let new_node = Node::new(
-            0,
-            0.0,
-            1.0,
-            true,
             None,
             None,
-            SplitScore::new("score".to_string(), 0.5),
+            Some(1.0),
+            None,
+            None,
+            None,
+            Some(SplitScore::new("score".to_string(), 0.5)),
             10,
             "leaf node".to_string(),
             0,
@@ -114,20 +114,24 @@ pub fn grow_tree(x: &DataFrame, y: &Series, parent_node: Option<&Node>, depth: u
         return new_node;
     }
 
+    // find best split
     let mut rng = ChaCha20Rng::seed_from_u64(42);
+    let leaf_weight = 1.0;
 
     let mut new_node = Node::new(
-        0,
-        0.0,
-        1.0,
-        true,
+        Some(0),
+        Some(0.0),
+        Some(leaf_weight),
+        Some(true),
         None,
         None,
-        SplitScore::new("score".to_string(), 0.5),
+        Some(SplitScore::new("score".to_string(), 0.5)),
         10,
         "leaf node".to_string(),
         0,
     );
+
+    // check if improvement due to split is below minimum requirement
 
     // descend left
     let new_left_node = grow_tree(x, y, Some(&new_node), &depth + 1); // mut new_node,
@@ -147,12 +151,14 @@ pub fn predict_for_row_with_tree(row: &Series, tree: &Node) -> f64 {
     let row = row_f64.f64().unwrap();
 
     while !node.is_leaf() {
-        let value: f64 = row.get(node.array_column).expect("Accessing failed.");
+        let col = node.array_column.unwrap();
+        let value: f64 = row.get(col).expect("Accessing failed.");
 
-        let is_left = if value < node.threshold {
-            node.default_is_left
+        let threshold = node.threshold.unwrap();
+        let is_left = if value < threshold {
+            node.default_is_left.unwrap()
         } else {
-            !node.default_is_left
+            !node.default_is_left.unwrap()
         };
         if is_left {
             node = node.left.as_ref().unwrap();
@@ -160,7 +166,7 @@ pub fn predict_for_row_with_tree(row: &Series, tree: &Node) -> f64 {
             node = node.right.as_ref().unwrap();
         }
     }
-    node.prediction
+    node.prediction.unwrap()
 }
 
 pub fn predict_with_tree(x: &DataFrame, tree: &Node) -> Series {
@@ -175,7 +181,7 @@ pub fn predict_with_tree(x: &DataFrame, tree: &Node) -> Series {
     predictions
 }
 
-struct DecisionTreeTemplate {
+pub struct DecisionTreeTemplate {
     pub max_depth: usize,
     tree: Option<Node>,
 }
@@ -217,25 +223,26 @@ mod tests {
     #[test]
     fn test_node_init() {
         let node = Node::new(
-            0,
-            0.0,
-            1.0,
-            true,
+            Some(0),
+            Some(0.0),
+            Some(1.0),
+            Some(true),
             None,
             None,
-            SplitScore::new("score".to_string(), 0.5),
+            Some(SplitScore::new("score".to_string(), 0.5)),
             10,
             "leaf node".to_string(),
             0,
         );
-        assert_eq!(node.array_column, 0);
-        assert_eq!(node.threshold, 0.0);
-        assert_eq!(node.prediction, 1.0);
-        assert_eq!(node.default_is_left, true);
+        assert_eq!(node.array_column.unwrap(), 0);
+        assert_eq!(node.threshold.unwrap(), 0.0);
+        assert_eq!(node.prediction.unwrap(), 1.0);
+        assert_eq!(node.default_is_left.unwrap(), true);
         assert_eq!(node.left, None);
         assert_eq!(node.right, None);
-        assert_eq!(node.measure.name, "score");
-        assert_eq!(node.measure.score, 0.5);
+        let m = node.measure.unwrap();
+        assert_eq!(m.name, "score");
+        assert_eq!(m.score, 0.5);
         assert_eq!(node.n_obs, 10);
         assert_eq!(node.reason, "leaf node".to_string());
         assert_eq!(node.depth, 0);
@@ -244,25 +251,25 @@ mod tests {
     #[test]
     fn test_child_node_assignment() {
         let mut node = Node::new(
-            0,
-            0.0,
-            1.0,
-            true,
+            Some(0),
+            Some(0.0),
+            Some(1.0),
+            Some(true),
             None,
             None,
-            SplitScore::new("score".to_string(), 0.5),
+            Some(SplitScore::new("score".to_string(), 0.5)),
             10,
             "leaf node".to_string(),
             0,
         );
         let child_node = Node::new(
-            0,
-            0.0,
-            1.0,
-            true,
+            Some(0),
+            Some(0.0),
+            Some(1.0),
+            Some(true),
             None,
             None,
-            SplitScore::new("score".to_string(), 0.5),
+            Some(SplitScore::new("score".to_string(), 0.5)),
             10,
             "leaf node".to_string(),
             0,
@@ -275,37 +282,37 @@ mod tests {
     #[test]
     fn test_grandchild_node_assignment() {
         let mut node = Node::new(
-            0,
-            0.0,
-            1.0,
-            true,
+            Some(0),
+            Some(0.0),
+            Some(1.0),
+            Some(true),
             None,
             None,
-            SplitScore::new("score".to_string(), 0.5),
+            Some(SplitScore::new("score".to_string(), 0.5)),
             10,
             "leaf node".to_string(),
             0,
         );
         let child_node = Node::new(
-            0,
-            0.0,
-            1.0,
-            true,
+            Some(0),
+            Some(0.0),
+            Some(1.0),
+            Some(true),
             None,
             None,
-            SplitScore::new("score".to_string(), 0.5),
+            Some(SplitScore::new("score".to_string(), 0.5)),
             10,
             "leaf node".to_string(),
             0,
         );
         let grandchild_node = Node::new(
-            0,
-            0.0,
-            1.0,
-            true,
+            Some(0),
+            Some(0.0),
+            Some(1.0),
+            Some(true),
             None,
             None,
-            SplitScore::new("score".to_string(), 0.5),
+            Some(SplitScore::new("score".to_string(), 0.5)),
             10,
             "leaf node".to_string(),
             0,
@@ -321,13 +328,13 @@ mod tests {
     #[test]
     fn test_node_is_leaf() {
         let node = Node {
-            array_column: 0,
-            threshold: 0.0,
-            prediction: 1.0,
-            default_is_left: true,
+            array_column: Some(0),
+            threshold: Some(0.0),
+            prediction: Some(1.0),
+            default_is_left: Some(true),
             left: None,
             right: None,
-            measure: SplitScore::new("score".to_string(), 0.5),
+            measure: Some(SplitScore::new("score".to_string(), 0.5)),
             n_obs: 10,
             reason: "leaf node".to_string(),
             depth: 1,
