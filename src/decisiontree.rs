@@ -3,7 +3,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use uuid::Uuid;
 
-use crate::utils::TreeGrowthParameters;
+use crate::{scoring, utils::TreeGrowthParameters};
 
 #[derive(PartialEq, Debug)]
 pub struct SplitScore {
@@ -118,7 +118,6 @@ pub fn calc_leaf_weight(
     g: Option<&Series>,
     h: Option<&Series>,
 ) -> f64 {
-
     let leaf_weight = y.mean().unwrap();
 
     leaf_weight
@@ -131,10 +130,11 @@ pub fn calc_leaf_weight_and_split_score(
     h: Option<&Series>,
     incrementing_score: Option<f64>,
 ) -> (f64, SplitScore) {
-
     let leaf_weight = calc_leaf_weight(y, growth_params, g, h);
 
-    let score = SplitScore::new("score".to_string(), 0.5);
+    let target_groups: Series = Series::new("target_groups", vec![true; y.len()]);
+    let score = scoring::calc_score(y, &target_groups, growth_params, g, h, incrementing_score);
+    let score = SplitScore::new("neg_entropy".to_string(), score);
 
     (leaf_weight, score)
 }
@@ -149,7 +149,6 @@ pub fn grow_tree(
     parent_node: Option<&Node>,
     depth: usize,
 ) -> Node {
-
     let n_obs = x.height();
     if n_obs == 0 {
         panic!("Something went wrong. The parent_node handed down an empty set of data points.")
@@ -177,7 +176,6 @@ pub fn grow_tree(
 
     // find best split
     let mut rng = ChaCha20Rng::seed_from_u64(42);
-
 
     let mut new_node = Node::new(
         Some(0),
@@ -405,6 +403,18 @@ mod tests {
             node_id: Uuid::new_v4(),
         };
         assert_eq!(node.is_leaf(), true);
+    }
+
+    // test calc_leaf_weight_and_split_score
+    #[test]
+    fn test_calc_leaf_weight_and_split_score() {
+        let y = Series::new("y", &[1, 1, 1]);
+        let growth_params = TreeGrowthParameters { max_depth: Some(2) };
+        let (leaf_weight, score) =
+            calc_leaf_weight_and_split_score(&y, &growth_params, None, None, None);
+        assert_eq!(leaf_weight, 1.0);
+        assert_eq!(score.name, "neg_entropy");
+        assert_eq!(score.score, 0.0);
     }
 
     #[test]
