@@ -9,9 +9,9 @@ name = "random_tree_models"
 crate-type = ["cdylib"]
 
 [dependencies]
-polars = { version = "0.35.4", features = ["lazy"] }
+polars = { version = "0.36.2", features = ["lazy", "dtype-struct"] }
 pyo3 = "0.20.0"
-pyo3-polars = "0.9.0"
+pyo3-polars = "0.10.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 uuid = { version = "1.6.1", features = ["v4"] }
