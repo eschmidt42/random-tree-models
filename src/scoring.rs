@@ -162,19 +162,19 @@ mod tests {
         let counts = count_y_values(&s);
         // assert that counts is a series with one value
         let exp: Vec<u32> = vec![8];
-        assert_eq!(counts, Series::new("counts", exp));
+        assert_eq!(counts, Series::new("count", exp));
 
         let values = vec![0, 1, 0, 1, 0, 1, 0, 1];
         let s = Series::new("y", values);
         let counts = count_y_values(&s);
         let exp: Vec<u32> = vec![4, 4];
-        assert_eq!(counts, Series::new("counts", exp));
+        assert_eq!(counts, Series::new("count", exp));
 
         let values = vec![0, 1, 2, 3, 4, 5, 6, 7];
         let s = Series::new("y", values);
         let counts = count_y_values(&s);
         let exp: Vec<u32> = vec![1, 1, 1, 1, 1, 1, 1, 1];
-        assert_eq!(counts, Series::new("counts", exp));
+        assert_eq!(counts, Series::new("count", exp));
     }
 
     // test calc_probabilities
