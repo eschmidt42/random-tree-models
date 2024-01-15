@@ -1,11 +1,14 @@
-use polars::prelude::*;
+use polars::{
+    lazy::dsl::GetOutput,
+    prelude::*,
+};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use uuid::Uuid;
 
 use crate::{scoring, utils::TreeGrowthParameters};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct SplitScore {
     pub name: String,
     pub score: f64,
@@ -17,7 +20,7 @@ impl SplitScore {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Node {
     pub array_column: Option<usize>,
     pub threshold: Option<f64>,
@@ -228,29 +231,63 @@ pub fn predict_for_row_with_tree(row: &Series, tree: &Node) -> f64 {
     node.prediction.unwrap()
 }
 
-pub fn predict_with_tree(x: &DataFrame, tree: &Node) -> Series {
-    // use polars to apply predict_for_row_with_tree to get one prediction per row
-    let predictions: Series = x
-        .iter()
-        .map(|row| predict_for_row_with_tree(row, tree))
-        .collect();
+pub fn udf<'a, 'b>(
+    s: Series,
+    n_cols: &'a usize,
+    tree: &'b Node,
+) -> Result<Option<Series>, PolarsError> {
+    let mut preds: Vec<f64> = vec![];
 
-    let predictions = Series::new("predictions", predictions);
+    for struct_ in s.iter() {
+        let mut row: Vec<f64> = vec![];
+        let mut iter = struct_._iter_struct_av();
+        for _ in 0..*n_cols {
+            let value = iter.next().unwrap().try_extract::<f64>().unwrap();
+            row.push(value);
+        }
+        let row = Series::new("", row);
+        let prediction = predict_for_row_with_tree(&row, tree);
+        preds.push(prediction);
+    }
 
-    predictions
+    Ok(Some(Series::new("predictions", preds)))
 }
 
-pub struct DecisionTreeTemplate {
+pub fn predict_with_tree(x: DataFrame, tree: Node) -> Series {
+    // use polars to apply predict_for_row_with_tree to get one prediction per row
+
+    let mut columns: Vec<Expr> = vec![];
+    let column_names = x.get_column_names();
+    for v in column_names {
+        columns.push(col(v));
+    }
+    let n_cols: usize = columns.len();
+
+    let predictions = x
+        .lazy()
+        .select([as_struct(columns)
+            .apply(
+                move |s| udf(s, &n_cols, &tree),
+                GetOutput::from_type(DataType::Float64),
+            )
+            .alias("predictions")])
+        .collect()
+        .unwrap();
+
+    predictions.select_series(&["predictions"]).unwrap()[0].clone()
+}
+
+pub struct DecisionTreeCore {
     pub growth_params: TreeGrowthParameters,
     tree: Option<Node>,
 }
 
-impl DecisionTreeTemplate {
+impl DecisionTreeCore {
     pub fn new(max_depth: usize) -> Self {
         let growth_params = TreeGrowthParameters {
             max_depth: Some(max_depth),
         };
-        DecisionTreeTemplate {
+        DecisionTreeCore {
             growth_params,
             tree: None,
         }
@@ -261,10 +298,54 @@ impl DecisionTreeTemplate {
     }
 
     pub fn predict(&self, x: &DataFrame) -> Series {
-        match &self.tree {
+        let x = x.clone();
+        let tree_ = self.tree.clone();
+        match tree_ {
             Some(tree) => predict_with_tree(x, tree),
             None => panic!("Something went wrong. The tree is not initialized."),
         }
+    }
+}
+
+pub struct DecisionTreeClassifier {
+    decision_tree_core: DecisionTreeCore,
+}
+
+impl DecisionTreeClassifier {
+    pub fn new(max_depth: usize) -> Self {
+        DecisionTreeClassifier {
+            decision_tree_core: DecisionTreeCore::new(max_depth),
+        }
+    }
+
+    pub fn fit(&mut self, x: &DataFrame, y: &Series) {
+        self.decision_tree_core.fit(x, y);
+    }
+
+    pub fn predict_proba(&self, x: &DataFrame) -> DataFrame {
+        println!("predict_proba for {:?}", x.shape());
+        let class1 = self.decision_tree_core.predict(x);
+        println!("class1 {:?}", class1.len());
+        let y_proba: DataFrame = df!("class_1" => &class1)
+            .unwrap()
+            .lazy()
+            .with_columns([(lit(1.) - col("class_1")).alias("class_0")])
+            .collect()
+            .unwrap();
+        let y_proba = y_proba.select(&["class_0", "class_1"]).unwrap();
+        y_proba
+    }
+
+    pub fn predict(&self, x: &DataFrame) -> Series {
+        let y_proba = self.predict_proba(x);
+        // define "y" as a Series that contains the index of the maximum value column per row
+        let y = y_proba
+            .lazy()
+            .select([(col("class_1").gt(0.5)).alias("y")])
+            .collect()
+            .unwrap();
+
+        y.select_series(&["y"]).unwrap()[0].clone()
     }
 }
 
@@ -455,26 +536,27 @@ mod tests {
         assert_eq!(prediction, 1.0);
     }
 
-    // test predict_with_tree
     #[test]
     fn test_predict_with_tree() {
         let df = DataFrame::new(vec![
-            Series::new("a", &[1, 2, 3]),
-            Series::new("b", &[1, 2, 3]),
-            Series::new("c", &[1, 2, 3]),
+            Series::new("a", &[1, 2, 3, 4]),
+            Series::new("b", &[1, 2, 3, 4]),
+            Series::new("c", &[1, 2, 3, 4]),
         ])
         .unwrap();
-        let y = Series::new("y", &[1, 1, 1]);
+        let y = Series::new("y", &[1, 1, 1, 1]);
         let growth_params = TreeGrowthParameters { max_depth: Some(2) };
         let tree = grow_tree(&df, &y, &growth_params, None, 0);
 
-        let predictions = predict_with_tree(&df, &tree);
-        assert_eq!(predictions, Series::new("predictions", &[1.0, 1.0, 1.0]));
+        let predictions = predict_with_tree(df, tree);
+        assert_eq!(
+            predictions,
+            Series::new("predictions", &[1.0, 1.0, 1.0, 1.0])
+        );
     }
 
-    // test DecisionTreeTemplate
     #[test]
-    fn test_decision_tree_template() {
+    fn test_decision_tree_core() {
         let df = DataFrame::new(vec![
             Series::new("a", &[1, 2, 3]),
             Series::new("b", &[1, 2, 3]),
@@ -483,9 +565,35 @@ mod tests {
         .unwrap();
         let y = Series::new("y", &[1, 1, 1]);
 
-        let mut dtree = DecisionTreeTemplate::new(2);
+        let mut dtree = DecisionTreeCore::new(2);
         dtree.fit(&df, &y);
         let predictions = dtree.predict(&df);
         assert_eq!(predictions, Series::new("predictions", &[1.0, 1.0, 1.0]));
+    }
+
+    #[test]
+    fn test_decision_tree_classifier() {
+        let df = DataFrame::new(vec![
+            Series::new("a", &[1, 2, 3]),
+            Series::new("b", &[1, 2, 3]),
+            Series::new("c", &[1, 2, 3]),
+        ])
+        .unwrap();
+        let y = Series::new("y", &[1, 1, 1]);
+
+        let mut dtree = DecisionTreeClassifier::new(2);
+        dtree.fit(&df, &y);
+        let predictions = dtree.predict(&df);
+        assert_eq!(predictions, Series::new("y", &[1, 1, 1]));
+
+        let y_proba = dtree.predict_proba(&df);
+        assert_eq!(y_proba.shape(), (3, 2));
+        assert_eq!(y_proba.get_column_names(), &["class_0", "class_1"]);
+        // assert that y_proba sums to 1 per row
+        let y_proba_sum = y_proba
+            .sum_horizontal(polars::frame::NullStrategy::Propagate)
+            .unwrap()
+            .unwrap();
+        assert_eq!(y_proba_sum, Series::new("class_0", &[1.0, 1.0, 1.0]));
     }
 }

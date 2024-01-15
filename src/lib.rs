@@ -9,7 +9,7 @@ mod utils;
 #[pyo3(name = "_rust")]
 fn random_tree_models(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     register_scoring_module(py, m)?;
-    m.add_class::<DecisionTree>()?;
+    m.add_class::<DecisionTreeClassifier>()?;
     Ok(())
 }
 
@@ -23,34 +23,41 @@ fn register_scoring_module(py: Python<'_>, parent_module: &PyModule) -> PyResult
 }
 
 #[pyclass]
-struct DecisionTree {
+struct DecisionTreeClassifier {
     max_depth: usize,
-    tree_: Option<decisiontree::DecisionTreeTemplate>,
+    tree_: Option<decisiontree::DecisionTreeClassifier>,
 }
 
 #[pymethods]
-impl DecisionTree {
+impl DecisionTreeClassifier {
     #[new]
     fn new(max_depth: usize) -> Self {
-        DecisionTree {
+        DecisionTreeClassifier {
             max_depth,
             tree_: None,
         }
     }
 
-    fn fit(&mut self, X: PyDataFrame, y: PySeries) -> PyResult<()> {
-        let mut tree = decisiontree::DecisionTreeTemplate::new(self.max_depth);
-        let X: DataFrame = X.into();
+    fn fit(&mut self, x: PyDataFrame, y: PySeries) -> PyResult<()> {
+        let mut tree = decisiontree::DecisionTreeClassifier::new(self.max_depth);
+        let x: DataFrame = x.into();
         let y: Series = y.into();
-        tree.fit(&X, &y);
+        tree.fit(&x, &y);
         self.tree_ = Some(tree);
         Ok(())
     }
 
-    fn predict(&self, X: PyDataFrame) -> PyResult<PySeries> {
-        let X: DataFrame = X.into();
-        let y_pred = self.tree_.as_ref().unwrap().predict(&X);
+    fn predict(&self, x: PyDataFrame) -> PyResult<PySeries> {
+        let x: DataFrame = x.into();
+        let y_pred = self.tree_.as_ref().unwrap().predict(&x);
 
         Ok(PySeries(y_pred))
+    }
+
+    fn predict_proba(&self, x: PyDataFrame) -> PyResult<PyDataFrame> {
+        let x: DataFrame = x.into();
+        let y_pred = self.tree_.as_ref().unwrap().predict_proba(&x);
+
+        Ok(PyDataFrame(y_pred))
     }
 }
