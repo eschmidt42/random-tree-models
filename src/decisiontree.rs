@@ -1,7 +1,4 @@
-use polars::{
-    lazy::dsl::GetOutput,
-    prelude::*,
-};
+use polars::{lazy::dsl::GetOutput, prelude::*};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use uuid::Uuid;
@@ -22,7 +19,8 @@ impl SplitScore {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Node {
-    pub array_column: Option<usize>,
+    pub column: Option<String>,
+    pub column_idx: Option<usize>,
     pub threshold: Option<f64>,
     pub prediction: Option<f64>,
     pub default_is_left: Option<bool>,
@@ -42,7 +40,8 @@ pub struct Node {
 
 impl Node {
     pub fn new(
-        array_column: Option<usize>,
+        column: Option<String>,
+        column_idx: Option<usize>,
         threshold: Option<f64>,
         prediction: Option<f64>,
         default_is_left: Option<bool>,
@@ -55,7 +54,8 @@ impl Node {
     ) -> Self {
         let node_id = Uuid::new_v4();
         Node {
-            array_column,
+            column,
+            column_idx,
             threshold,
             prediction,
             default_is_left,
@@ -142,6 +142,91 @@ pub fn calc_leaf_weight_and_split_score(
     (leaf_weight, score)
 }
 
+pub struct BestSplit {
+    pub score: f64,
+    pub column: String,
+    pub column_idx: usize,
+    pub threshold: f64,
+    pub target_groups: Series,
+    pub default_is_left: Option<bool>,
+}
+
+impl BestSplit {
+    pub fn new(
+        score: f64,
+        column: String,
+        column_idx: usize,
+        threshold: f64,
+        target_groups: Series,
+        default_is_left: Option<bool>,
+    ) -> Self {
+        BestSplit {
+            score,
+            column,
+            column_idx,
+            threshold,
+            target_groups,
+            default_is_left,
+        }
+    }
+}
+
+pub fn find_best_split(
+    x: &DataFrame,
+    y: &Series,
+    growth_params: &TreeGrowthParameters,
+    g: Option<&Series>,
+    h: Option<&Series>,
+    incrementing_score: Option<f64>,
+) -> BestSplit {
+    if y.len() <= 1 {
+        panic!("Something went wrong. The parent_node handed down less than two data points.")
+    }
+
+    let mut best_split: Option<BestSplit> = None;
+
+    for (idx, col) in x.get_column_names().iter().enumerate() {
+        let mut feature_values = x.select_series(&[col]).unwrap()[0]
+            .clone()
+            .cast(&DataType::Float64)
+            .unwrap();
+        feature_values = feature_values.sort(false);
+
+        for value in feature_values.iter() {
+            let value: f64 = value.try_extract().unwrap();
+            let target_groups = feature_values.lt(value).unwrap();
+            let target_groups = Series::new("target_groups", target_groups);
+
+            let score =
+                scoring::calc_score(y, &target_groups, growth_params, g, h, incrementing_score);
+
+            match best_split {
+                Some(ref mut best_split) => {
+                    if score < best_split.score {
+                        best_split.score = score;
+                        best_split.column = col.to_string();
+                        best_split.threshold = value;
+                        best_split.target_groups = target_groups;
+                        best_split.default_is_left = None;
+                    }
+                }
+                None => {
+                    best_split = Some(BestSplit::new(
+                        score,
+                        col.to_string(),
+                        idx,
+                        value,
+                        target_groups,
+                        None,
+                    ));
+                }
+            }
+        }
+    }
+
+    best_split.unwrap()
+}
+
 // Inspirations:
 // * https://rusty-ferris.pages.dev/blog/binary-tree-sum-of-values/
 // * https://gist.github.com/aidanhs/5ac9088ca0f6bdd4a370
@@ -158,39 +243,45 @@ pub fn grow_tree(
     }
 
     let (is_baselevel, reason) = check_is_baselevel(y, depth, growth_params);
+
+    let (leaf_weight, score) = calc_leaf_weight_and_split_score(y, growth_params, None, None, None);
+
     if is_baselevel {
         let new_node = Node::new(
             None,
             None,
-            Some(1.0),
+            None,
+            Some(leaf_weight),
             None,
             None,
             None,
-            Some(SplitScore::new("score".to_string(), 0.5)),
-            10,
+            Some(score),
+            n_obs,
             reason,
-            0,
+            depth,
         );
         return new_node;
     }
 
-    // let leaf_weight = 1.0;
-    let (leaf_weight, score) = calc_leaf_weight_and_split_score(y, growth_params, None, None, None);
-
     // find best split
-    let mut rng = ChaCha20Rng::seed_from_u64(42);
+    let best = find_best_split(x, y, growth_params, None, None, None);
+    // let mut rng = ChaCha20Rng::seed_from_u64(42);
 
     let mut new_node = Node::new(
-        Some(0),
-        Some(0.0),
+        Some(best.column),
+        Some(best.column_idx),
+        Some(best.threshold),
         Some(leaf_weight),
-        Some(true),
+        match best.default_is_left {
+            Some(default_is_left) => Some(default_is_left),
+            None => None,
+        },
         None,
         None,
-        Some(SplitScore::new("score".to_string(), 0.5)),
-        10,
+        Some(SplitScore::new("neg_entropy".to_string(), best.score)),
+        n_obs,
         "leaf node".to_string(),
-        0,
+        depth,
     );
 
     // check if improvement due to split is below minimum requirement
@@ -213,8 +304,8 @@ pub fn predict_for_row_with_tree(row: &Series, tree: &Node) -> f64 {
     let row = row_f64.f64().unwrap();
 
     while !node.is_leaf() {
-        let col = node.array_column.unwrap();
-        let value: f64 = row.get(col).expect("Accessing failed.");
+        let idx = node.column_idx.unwrap();
+        let value: f64 = row.get(idx).expect("Accessing failed.");
 
         let threshold = node.threshold.unwrap();
         let is_left = if value < threshold {
@@ -366,6 +457,7 @@ mod tests {
     #[test]
     fn test_node_init() {
         let node = Node::new(
+            Some("column".to_string()),
             Some(0),
             Some(0.0),
             Some(1.0),
@@ -377,7 +469,8 @@ mod tests {
             "leaf node".to_string(),
             0,
         );
-        assert_eq!(node.array_column.unwrap(), 0);
+        assert_eq!(node.column.unwrap(), "column".to_string());
+        assert_eq!(node.column_idx.unwrap(), 0);
         assert_eq!(node.threshold.unwrap(), 0.0);
         assert_eq!(node.prediction.unwrap(), 1.0);
         assert_eq!(node.default_is_left.unwrap(), true);
@@ -394,6 +487,7 @@ mod tests {
     #[test]
     fn test_child_node_assignment() {
         let mut node = Node::new(
+            Some("column".to_string()),
             Some(0),
             Some(0.0),
             Some(1.0),
@@ -406,6 +500,7 @@ mod tests {
             0,
         );
         let child_node = Node::new(
+            Some("column".to_string()),
             Some(0),
             Some(0.0),
             Some(1.0),
@@ -425,6 +520,7 @@ mod tests {
     #[test]
     fn test_grandchild_node_assignment() {
         let mut node = Node::new(
+            Some("column".to_string()),
             Some(0),
             Some(0.0),
             Some(1.0),
@@ -437,6 +533,7 @@ mod tests {
             0,
         );
         let child_node = Node::new(
+            Some("column".to_string()),
             Some(0),
             Some(0.0),
             Some(1.0),
@@ -449,6 +546,7 @@ mod tests {
             0,
         );
         let grandchild_node = Node::new(
+            Some("column".to_string()),
             Some(0),
             Some(0.0),
             Some(1.0),
@@ -471,7 +569,8 @@ mod tests {
     #[test]
     fn test_node_is_leaf() {
         let node = Node {
-            array_column: Some(0),
+            column: Some("column".to_string()),
+            column_idx: Some(0),
             threshold: Some(0.0),
             prediction: Some(1.0),
             default_is_left: Some(true),
