@@ -99,8 +99,8 @@ pub fn entropy_rs(y: &Series, target_groups: &Series) -> f64 {
     let trues = Series::new("", vec![true; target_groups.len()]);
     let target_groups = target_groups.equal(&trues).unwrap();
 
-    let mut entropy_left = 0.0;
-    let mut entropy_right = 0.0;
+    let entropy_left: f64;
+    let entropy_right: f64;
     if w_left > 0. {
         let y_left = y.filter(&target_groups).unwrap();
         let probs = calc_probabilities(&y_left);
@@ -122,19 +122,22 @@ pub fn entropy_rs(y: &Series, target_groups: &Series) -> f64 {
 pub fn calc_score(
     y: &Series,
     target_groups: &Series,
-    growth_params: &TreeGrowthParameters,
-    g: Option<&Series>,
-    h: Option<&Series>,
-    incrementing_score: Option<f64>,
+    _growth_params: &TreeGrowthParameters,
+    _g: Option<&Series>,
+    _h: Option<&Series>,
+    _incrementing_score: Option<f64>,
 ) -> f64 {
     let score = entropy_rs(y, target_groups);
 
     score
 }
 
+#[cfg(test)]
 mod tests {
+
     use super::*;
     // test that gini impurity correctly computes values smaller than zero for a couple of vectors
+
     #[test]
     fn test_gini_impurity() {
         let values = vec![0, 0, 0, 0, 0, 0, 0, 0];

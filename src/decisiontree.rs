@@ -1,6 +1,6 @@
 use polars::{lazy::dsl::GetOutput, prelude::*};
-use rand::SeedableRng;
-use rand_chacha::ChaCha20Rng;
+// use rand::SeedableRng;
+// use rand_chacha::ChaCha20Rng;
 use uuid::Uuid;
 
 use crate::{scoring, utils::TreeGrowthParameters};
@@ -117,9 +117,9 @@ pub fn check_is_baselevel(
 
 pub fn calc_leaf_weight(
     y: &Series,
-    growth_params: &TreeGrowthParameters,
-    g: Option<&Series>,
-    h: Option<&Series>,
+    _growth_params: &TreeGrowthParameters,
+    _g: Option<&Series>,
+    _h: Option<&Series>,
 ) -> f64 {
     let leaf_weight = y.mean().unwrap();
 
@@ -142,6 +142,7 @@ pub fn calc_leaf_weight_and_split_score(
     (leaf_weight, score)
 }
 
+#[derive(PartialEq, Debug, Clone)]
 pub struct BestSplit {
     pub score: f64,
     pub column: String,
@@ -182,28 +183,40 @@ pub fn find_best_split(
     if y.len() <= 1 {
         panic!("Something went wrong. The parent_node handed down less than two data points.")
     }
-
+    // TODO: handle case where there are duplicates
+    // TODO: handle case where there is only one unique y value but multiple non-duplicate x values
     let mut best_split: Option<BestSplit> = None;
-
+    // println!("finding best split");
     for (idx, col) in x.get_column_names().iter().enumerate() {
-        let mut feature_values = x.select_series(&[col]).unwrap()[0]
+        // println!("col {:?}, idx {:?}", col, idx);
+        let feature_values = x.select_series(&[col]).unwrap()[0]
             .clone()
             .cast(&DataType::Float64)
             .unwrap();
-        feature_values = feature_values.sort(false);
 
-        for value in feature_values.iter() {
+        let unique_values = feature_values.unique().unwrap().sort(false);
+
+        // skip the below if there is only one unique value
+        if unique_values.len() == 1 {
+            continue;
+        }
+
+        let mut unique_iter = unique_values.iter();
+        unique_iter.next().unwrap(); // skipping the first value
+        for value in unique_iter {
             let value: f64 = value.try_extract().unwrap();
+            // println!("value {:?}", value);
             let target_groups = feature_values.lt(value).unwrap();
             let target_groups = Series::new("target_groups", target_groups);
 
             let score =
                 scoring::calc_score(y, &target_groups, growth_params, g, h, incrementing_score);
-
+            // println!("score {:?}", score);
             match best_split {
                 Some(ref mut best_split) => {
-                    if score < best_split.score {
+                    if score > best_split.score {
                         best_split.score = score;
+                        best_split.column_idx = idx;
                         best_split.column = col.to_string();
                         best_split.threshold = value;
                         best_split.target_groups = target_groups;
@@ -221,10 +234,40 @@ pub fn find_best_split(
                     ));
                 }
             }
+            // println!("best_split {:?}", best_split);
         }
     }
 
     best_split.unwrap()
+}
+
+pub fn select_arrays_for_child_node(
+    go_left: bool,
+    best: &BestSplit,
+    x: DataFrame,
+    y: Series,
+) -> (DataFrame, Series) {
+    if go_left {
+        let x_child = x
+            .clone()
+            .filter(&best.target_groups.bool().unwrap())
+            .unwrap();
+        let y_child = y
+            .clone()
+            .filter(&best.target_groups.bool().unwrap())
+            .unwrap();
+        return (x_child, y_child);
+    } else {
+        let x_child = x
+            .clone()
+            .filter(&!best.target_groups.bool().unwrap())
+            .unwrap();
+        let y_child = y
+            .clone()
+            .filter(&!best.target_groups.bool().unwrap())
+            .unwrap();
+        return (x_child, y_child);
+    }
 }
 
 // Inspirations:
@@ -234,10 +277,12 @@ pub fn grow_tree(
     x: &DataFrame,
     y: &Series,
     growth_params: &TreeGrowthParameters,
-    parent_node: Option<&Node>,
+    _parent_node: Option<&Node>,
     depth: usize,
 ) -> Node {
     let n_obs = x.height();
+    // println!("\nn_obs {:?}", n_obs);
+    // println!("depth {:?}", depth);
     if n_obs == 0 {
         panic!("Something went wrong. The parent_node handed down an empty set of data points.")
     }
@@ -245,7 +290,7 @@ pub fn grow_tree(
     let (is_baselevel, reason) = check_is_baselevel(y, depth, growth_params);
 
     let (leaf_weight, score) = calc_leaf_weight_and_split_score(y, growth_params, None, None, None);
-
+    // println!("leaf_weight {:?}", leaf_weight);
     if is_baselevel {
         let new_node = Node::new(
             None,
@@ -265,20 +310,26 @@ pub fn grow_tree(
 
     // find best split
     let best = find_best_split(x, y, growth_params, None, None, None);
+    // println!("column {:?}", best.column);
+    // println!("column_idx {:?}", best.column_idx);
+    // println!("threshold {:?}", best.threshold);
+    // println!("target_groups {:?}", best.target_groups);
+
     // let mut rng = ChaCha20Rng::seed_from_u64(42);
 
+    let best_ = best.clone();
     let mut new_node = Node::new(
-        Some(best.column),
-        Some(best.column_idx),
-        Some(best.threshold),
+        Some(best_.column),
+        Some(best_.column_idx),
+        Some(best_.threshold),
         Some(leaf_weight),
-        match best.default_is_left {
+        match best_.default_is_left {
             Some(default_is_left) => Some(default_is_left),
             None => None,
         },
         None,
         None,
-        Some(SplitScore::new("neg_entropy".to_string(), best.score)),
+        Some(SplitScore::new("neg_entropy".to_string(), best_.score)),
         n_obs,
         "leaf node".to_string(),
         depth,
@@ -287,11 +338,23 @@ pub fn grow_tree(
     // check if improvement due to split is below minimum requirement
 
     // descend left
-    let new_left_node = grow_tree(x, y, growth_params, Some(&new_node), &depth + 1); // mut new_node,
+    let (x_left, y_left) = select_arrays_for_child_node(true, &best, x.clone(), y.clone());
+    // println!("x_left {:?}", x_left);
+    // println!("y_left {:?}", y_left);
+    let new_left_node = grow_tree(&x_left, &y_left, growth_params, Some(&new_node), &depth + 1); // mut new_node,
     new_node.insert(new_left_node, true);
 
     // descend right
-    let new_right_node = grow_tree(x, y, growth_params, Some(&new_node), depth + 1); // mut new_node,
+    let (x_right, y_right) = select_arrays_for_child_node(false, &best, x.clone(), y.clone());
+    // println!("x_right {:?}", x_right);
+    // println!("y_right {:?}", y_right);
+    let new_right_node = grow_tree(
+        &x_right,
+        &y_right,
+        growth_params,
+        Some(&new_node),
+        depth + 1,
+    ); // mut new_node,
     new_node.insert(new_right_node, false);
 
     return new_node;
@@ -308,11 +371,13 @@ pub fn predict_for_row_with_tree(row: &Series, tree: &Node) -> f64 {
         let value: f64 = row.get(idx).expect("Accessing failed.");
 
         let threshold = node.threshold.unwrap();
-        let is_left = if value < threshold {
-            node.default_is_left.unwrap()
-        } else {
-            !node.default_is_left.unwrap()
-        };
+        let is_left = value < threshold;
+        // println!("idx {:?} value {:?} threshold {:?} is_left {:?}", idx, value, threshold, is_left);
+        // let is_left = if value < threshold {
+        //     node.default_is_left.unwrap()
+        // } else {
+        //     !node.default_is_left.unwrap()
+        // };
         if is_left {
             node = node.left.as_ref().unwrap();
         } else {
@@ -337,7 +402,9 @@ pub fn udf<'a, 'b>(
             row.push(value);
         }
         let row = Series::new("", row);
+        // println!("\nrow {:?}", row);
         let prediction = predict_for_row_with_tree(&row, tree);
+        // println!("prediction {:?}", prediction);
         preds.push(prediction);
     }
 
@@ -414,9 +481,9 @@ impl DecisionTreeClassifier {
     }
 
     pub fn predict_proba(&self, x: &DataFrame) -> DataFrame {
-        println!("predict_proba for {:?}", x.shape());
+        // println!("predict_proba for {:?}", x.shape());
         let class1 = self.decision_tree_core.predict(x);
-        println!("class1 {:?}", class1.len());
+        // println!("class1 {:?}", class1.len());
         let y_proba: DataFrame = df!("class_1" => &class1)
             .unwrap()
             .lazy()
@@ -694,5 +761,78 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(y_proba_sum, Series::new("class_0", &[1.0, 1.0, 1.0]));
+    }
+
+    #[test]
+    fn test_decision_tree_classifier_1d() {
+        let df = DataFrame::new(vec![Series::new("a", &[1, 2, 3])]).unwrap();
+        let y = Series::new("y", &[0, 1, 1]);
+
+        let mut dtree = DecisionTreeClassifier::new(2);
+        dtree.fit(&df, &y);
+        let predictions = dtree.predict(&df);
+        assert_eq!(predictions, Series::new("y", &[0, 1, 1]));
+
+        let y_proba = dtree.predict_proba(&df);
+        assert_eq!(y_proba.shape(), (3, 2));
+        assert_eq!(y_proba.get_column_names(), &["class_0", "class_1"]);
+        // assert that y_proba sums to 1 per row
+        let y_proba_sum = y_proba
+            .sum_horizontal(polars::frame::NullStrategy::Propagate)
+            .unwrap()
+            .unwrap();
+        assert_eq!(y_proba_sum, Series::new("class_0", &[1.0, 1.0, 1.0]));
+    }
+
+    #[test]
+    fn test_decision_tree_classifier_2d_case1() {
+        // is given two columns but only needs one
+        let df = DataFrame::new(vec![
+            Series::new("a", &[1, 1, 1]),
+            Series::new("b", &[1, 2, 3]),
+        ])
+        .unwrap();
+        let y = Series::new("y", &[0, 1, 1]);
+
+        let mut dtree = DecisionTreeClassifier::new(2);
+        dtree.fit(&df, &y);
+        let predictions = dtree.predict(&df);
+        assert_eq!(predictions, Series::new("y", &[0, 1, 1]));
+
+        let y_proba = dtree.predict_proba(&df);
+        assert_eq!(y_proba.shape(), (3, 2));
+        assert_eq!(y_proba.get_column_names(), &["class_0", "class_1"]);
+        // assert that y_proba sums to 1 per row
+        let y_proba_sum = y_proba
+            .sum_horizontal(polars::frame::NullStrategy::Propagate)
+            .unwrap()
+            .unwrap();
+        assert_eq!(y_proba_sum, Series::new("class_0", &[1.0, 1.0, 1.0]));
+    }
+
+    #[test]
+    fn test_decision_tree_classifier_2d_case2() {
+        // is given two columns and needs both
+        let df = DataFrame::new(vec![
+            Series::new("a", &[-1, 1, -1, 1]),
+            Series::new("b", &[-1, -1, 1, 1]),
+        ])
+        .unwrap();
+        let y = Series::new("y", &[0, 1, 1, 1]);
+
+        let mut dtree = DecisionTreeClassifier::new(2);
+        dtree.fit(&df, &y);
+        let predictions = dtree.predict(&df);
+        assert_eq!(predictions, Series::new("y", &[0, 1, 1, 1]));
+
+        let y_proba = dtree.predict_proba(&df);
+        assert_eq!(y_proba.shape(), (4, 2));
+        assert_eq!(y_proba.get_column_names(), &["class_0", "class_1"]);
+        // assert that y_proba sums to 1 per row
+        let y_proba_sum = y_proba
+            .sum_horizontal(polars::frame::NullStrategy::Propagate)
+            .unwrap()
+            .unwrap();
+        assert_eq!(y_proba_sum, Series::new("class_0", &[1.0, 1.0, 1.0, 1.0]));
     }
 }
