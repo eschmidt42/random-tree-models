@@ -119,6 +119,22 @@ pub fn neg_entropy_rs(y: &Series, target_groups: &Series) -> f64 {
     score
 }
 
+pub fn series_neg_variance(y: Series) -> f64 {
+    if y.len() == 1 {
+        return 0.;
+    }
+
+    let var_series = y.var_as_series(1).unwrap();
+
+    let variance = var_series
+        .f64()
+        .expect("not float64")
+        .get(0)
+        .expect("was null");
+
+    -variance
+}
+
 pub fn neg_variance_rs(y: &Series, target_groups: &Series) -> f64 {
     let msg = "Could not cast to f64";
     let w_left: f64 = (*target_groups)
@@ -135,34 +151,23 @@ pub fn neg_variance_rs(y: &Series, target_groups: &Series) -> f64 {
 
     let variance_left: f64;
     let variance_right: f64;
+    if w_left == 1. || w_right == 1. {
+        return series_neg_variance(y.clone());
+    }
     if w_left > 0. {
         let y_left = y.filter(&target_groups).unwrap();
-        let ddof_left: u8 = (y_left.len() - 1).try_into().unwrap();
-        variance_left = y_left
-            .var_as_series(ddof_left)
-            .unwrap()
-            .f64()
-            .expect("not f64")
-            .get(0)
-            .expect("was null");
+        variance_left = series_neg_variance(y_left);
     } else {
         variance_left = 0.0;
     }
     if w_right > 0. {
         let y_right = y.filter(&!target_groups).unwrap();
-        let ddof_right: u8 = (y_right.len() - 1).try_into().unwrap();
-        variance_right = y_right
-            .var_as_series(ddof_right)
-            .unwrap()
-            .f64()
-            .expect("not f64")
-            .get(0)
-            .expect("was null");
+        variance_right = series_neg_variance(y_right);
     } else {
         variance_right = 0.0;
     }
     let score = (w_left * variance_left) + (w_right * variance_right);
-    -score
+    score
 }
 
 pub fn calc_score(
@@ -376,7 +381,25 @@ mod tests {
         assert_eq!(score, -1.0);
     }
 
-    // test neg_variance_rs
+    #[test]
+    fn test_series_neg_variance_rs() {
+        let s = Series::new("y", vec![1]);
+        let score = series_neg_variance(s);
+        assert_eq!(score, 0.0);
+
+        let s = Series::new("y", vec![0, 0, 0, 0, 0, 0, 0, 0]);
+        let score = series_neg_variance(s);
+        assert_eq!(score, 0.0);
+
+        let s = Series::new("y", vec![0, 1, 0, 1, 0, 1, 0, 1]);
+        let score = series_neg_variance(s);
+        assert_eq!(score, -0.2857142857142857);
+
+        let s = Series::new("y", vec![0, 1, 2, 3, 4, 5, 6, 7]);
+        let score = series_neg_variance(s);
+        assert_eq!(score, -6.);
+    }
+
     #[test]
     fn test_neg_variance_rs() {
         let values = vec![0, 0, 0, 0, 0, 0, 0, 0];
@@ -389,13 +412,13 @@ mod tests {
         let s = Series::new("y", values);
         let target_groups = Series::new("target_groups", vec![true; 8]);
         let score = neg_variance_rs(&s, &target_groups);
-        assert_eq!(score, -2.);
+        assert_eq!(score, -0.2857142857142857);
 
         let values = vec![0, 1, 2, 3, 4, 5, 6, 7];
         let s = Series::new("y", values);
         let target_groups = Series::new("target_groups", vec![true; 8]);
         let score = neg_variance_rs(&s, &target_groups);
-        assert_eq!(score, -42.);
+        assert_eq!(score, -6.);
 
         let values = vec![0, 0, 0, 0, 0, 0, 0, 0];
         let s = Series::new("y", values);
@@ -413,6 +436,15 @@ mod tests {
             vec![true, true, true, true, false, false, false, false],
         );
         let score = neg_variance_rs(&s, &target_groups);
-        assert_eq!(score, -1.);
+        assert_eq!(score, -0.3333333333333333);
+
+        let values = vec![0., 1., 0., 1., 0., 1., 0., 1.];
+        let s = Series::new("y", values);
+        let target_groups = Series::new(
+            "target_groups",
+            vec![true, true, true, true, false, false, false, false],
+        );
+        let score = neg_variance_rs(&s, &target_groups);
+        assert_eq!(score, -0.3333333333333333);
     }
 }
