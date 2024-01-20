@@ -4,7 +4,7 @@ use polars::prelude::*;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use crate::utils::TreeGrowthParameters;
+use crate::utils::{SplitScoreMetrics, TreeGrowthParameters};
 
 // compute gini impurity of an array of discrete values
 #[pyfunction(name = "gini_impurity")]
@@ -231,21 +231,30 @@ mod tests {
         let values = vec![0, 0, 0, 0, 0, 0, 0, 0];
         let s = Series::new("y", values);
         let target_groups = Series::new("target_groups", vec![true; 8]);
-        let growth_params = TreeGrowthParameters { max_depth: Some(1) };
+        let growth_params = TreeGrowthParameters {
+            max_depth: Some(1),
+            split_score_metric: Some(SplitScoreMetrics::Entropy),
+        };
         let score = calc_score(&s, &target_groups, &growth_params, None, None, None);
         assert_eq!(score, 0.0);
 
         let values = vec![0, 1, 0, 1, 0, 1, 0, 1];
         let s = Series::new("y", values);
         let target_groups = Series::new("target_groups", vec![true; 8]);
-        let growth_params = TreeGrowthParameters { max_depth: Some(1) };
+        let growth_params = TreeGrowthParameters {
+            max_depth: Some(1),
+            split_score_metric: Some(SplitScoreMetrics::Entropy),
+        };
         let score = calc_score(&s, &target_groups, &growth_params, None, None, None);
         assert_eq!(score, -1.0);
 
         let values = vec![0, 1, 2, 3, 4, 5, 6, 7];
         let s = Series::new("y", values);
         let target_groups = Series::new("target_groups", vec![true; 8]);
-        let growth_params = TreeGrowthParameters { max_depth: Some(1) };
+        let growth_params = TreeGrowthParameters {
+            max_depth: Some(1),
+            split_score_metric: Some(SplitScoreMetrics::Entropy),
+        };
         let score = calc_score(&s, &target_groups, &growth_params, None, None, None);
         assert_eq!(score, -3.0);
 
@@ -255,7 +264,10 @@ mod tests {
             "target_groups",
             vec![true, true, true, true, false, false, false, false],
         );
-        let growth_params = TreeGrowthParameters { max_depth: Some(1) };
+        let growth_params = TreeGrowthParameters {
+            max_depth: Some(1),
+            split_score_metric: Some(SplitScoreMetrics::Entropy),
+        };
         let score = calc_score(&s, &target_groups, &growth_params, None, None, None);
         assert_eq!(score, 0.0);
 
@@ -265,7 +277,10 @@ mod tests {
             "target_groups",
             vec![true, true, true, true, false, false, false, false],
         );
-        let growth_params = TreeGrowthParameters { max_depth: Some(1) };
+        let growth_params = TreeGrowthParameters {
+            max_depth: Some(1),
+            split_score_metric: Some(SplitScoreMetrics::Entropy),
+        };
         let score = calc_score(&s, &target_groups, &growth_params, None, None, None);
         assert_eq!(score, -1.0);
     }

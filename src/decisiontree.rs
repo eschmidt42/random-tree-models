@@ -3,7 +3,10 @@ use polars::{lazy::dsl::GetOutput, prelude::*};
 // use rand_chacha::ChaCha20Rng;
 use uuid::Uuid;
 
-use crate::{scoring, utils::TreeGrowthParameters};
+use crate::{
+    scoring,
+    utils::{SplitScoreMetrics, TreeGrowthParameters},
+};
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct SplitScore {
@@ -444,6 +447,7 @@ impl DecisionTreeCore {
     pub fn new(max_depth: usize) -> Self {
         let growth_params = TreeGrowthParameters {
             max_depth: Some(max_depth),
+            split_score_metric: Some(SplitScoreMetrics::Entropy),
         };
         DecisionTreeCore {
             growth_params,
@@ -656,7 +660,10 @@ mod tests {
     #[test]
     fn test_calc_leaf_weight_and_split_score() {
         let y = Series::new("y", &[1, 1, 1]);
-        let growth_params = TreeGrowthParameters { max_depth: Some(2) };
+        let growth_params = TreeGrowthParameters {
+            max_depth: Some(2),
+            split_score_metric: Some(SplitScoreMetrics::Entropy),
+        };
         let (leaf_weight, score) =
             calc_leaf_weight_and_split_score(&y, &growth_params, None, None, None);
         assert_eq!(leaf_weight, 1.0);
@@ -673,7 +680,10 @@ mod tests {
         ])
         .unwrap();
         let y = Series::new("y", &[1, 1, 2]);
-        let growth_params = TreeGrowthParameters { max_depth: Some(1) };
+        let growth_params = TreeGrowthParameters {
+            max_depth: Some(1),
+            split_score_metric: Some(SplitScoreMetrics::Entropy),
+        };
 
         let tree = grow_tree(&df, &y, &growth_params, None, 0);
 
@@ -693,7 +703,10 @@ mod tests {
         ])
         .unwrap();
         let y = Series::new("y", &[1, 1, 1]);
-        let growth_params = TreeGrowthParameters { max_depth: Some(2) };
+        let growth_params = TreeGrowthParameters {
+            max_depth: Some(2),
+            split_score_metric: Some(SplitScoreMetrics::Entropy),
+        };
 
         let tree = grow_tree(&df, &y, &growth_params, None, 0);
 
@@ -711,7 +724,10 @@ mod tests {
         ])
         .unwrap();
         let y = Series::new("y", &[1, 1, 1, 1]);
-        let growth_params = TreeGrowthParameters { max_depth: Some(2) };
+        let growth_params = TreeGrowthParameters {
+            max_depth: Some(2),
+            split_score_metric: Some(SplitScoreMetrics::Entropy),
+        };
         let tree = grow_tree(&df, &y, &growth_params, None, 0);
 
         let predictions = predict_with_tree(df, tree);
