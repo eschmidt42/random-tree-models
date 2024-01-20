@@ -10,6 +10,7 @@ mod utils;
 fn random_tree_models(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     register_scoring_module(py, m)?;
     m.add_class::<DecisionTreeClassifier>()?;
+    m.add_class::<DecisionTreeRegressor>()?;
     Ok(())
 }
 
@@ -62,4 +63,35 @@ impl DecisionTreeClassifier {
     }
 }
 
-// TODO: implement DecisionTreeRegressor
+#[pyclass]
+struct DecisionTreeRegressor {
+    max_depth: usize,
+    tree_: Option<decisiontree::DecisionTreeRegressor>,
+}
+
+#[pymethods]
+impl DecisionTreeRegressor {
+    #[new]
+    fn new(max_depth: usize) -> Self {
+        DecisionTreeRegressor {
+            max_depth,
+            tree_: None,
+        }
+    }
+
+    fn fit(&mut self, x: PyDataFrame, y: PySeries) -> PyResult<()> {
+        let mut tree = decisiontree::DecisionTreeRegressor::new(self.max_depth);
+        let x: DataFrame = x.into();
+        let y: Series = y.into();
+        tree.fit(&x, &y);
+        self.tree_ = Some(tree);
+        Ok(())
+    }
+
+    fn predict(&self, x: PyDataFrame) -> PyResult<PySeries> {
+        let x: DataFrame = x.into();
+        let y_pred = self.tree_.as_ref().unwrap().predict(&x);
+
+        Ok(PySeries(y_pred))
+    }
+}

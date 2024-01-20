@@ -120,13 +120,15 @@ pub fn check_is_baselevel(
 
 pub fn calc_leaf_weight(
     y: &Series,
-    _growth_params: &TreeGrowthParameters,
+    growth_params: &TreeGrowthParameters,
     _g: Option<&Series>,
     _h: Option<&Series>,
 ) -> f64 {
-    let leaf_weight = y.mean().unwrap();
-
-    leaf_weight
+    match growth_params.split_score_metric {
+        Some(SplitScoreMetrics::NegEntropy) => y.mean().unwrap(),
+        Some(SplitScoreMetrics::NegVariance) => y.mean().unwrap(),
+        _ => panic!("Something went wrong. The split_score_metric is not defined."),
+    }
 }
 
 pub fn calc_leaf_weight_and_split_score(
@@ -140,7 +142,12 @@ pub fn calc_leaf_weight_and_split_score(
 
     let target_groups: Series = Series::new("target_groups", vec![true; y.len()]);
     let score = scoring::calc_score(y, &target_groups, growth_params, g, h, incrementing_score);
-    let score = SplitScore::new("neg_entropy".to_string(), score);
+    let name = match &growth_params.split_score_metric {
+        Some(metric) => metric.to_string(),
+        _ => panic!("Something went wrong. The split_score_metric is not defined."),
+    };
+
+    let score = SplitScore::new(name, score);
 
     (leaf_weight, score)
 }
@@ -444,10 +451,10 @@ pub struct DecisionTreeCore {
 }
 
 impl DecisionTreeCore {
-    pub fn new(max_depth: usize) -> Self {
+    pub fn new(max_depth: usize, split_score_metric: SplitScoreMetrics) -> Self {
         let growth_params = TreeGrowthParameters {
             max_depth: Some(max_depth),
-            split_score_metric: Some(SplitScoreMetrics::Entropy),
+            split_score_metric: Some(split_score_metric),
         };
         DecisionTreeCore {
             growth_params,
@@ -476,7 +483,7 @@ pub struct DecisionTreeClassifier {
 impl DecisionTreeClassifier {
     pub fn new(max_depth: usize) -> Self {
         DecisionTreeClassifier {
-            decision_tree_core: DecisionTreeCore::new(max_depth),
+            decision_tree_core: DecisionTreeCore::new(max_depth, SplitScoreMetrics::NegEntropy),
         }
     }
 
@@ -508,6 +515,28 @@ impl DecisionTreeClassifier {
             .unwrap();
 
         y.select_series(&["y"]).unwrap()[0].clone()
+    }
+}
+
+pub struct DecisionTreeRegressor {
+    decision_tree_core: DecisionTreeCore,
+}
+
+impl DecisionTreeRegressor {
+    pub fn new(max_depth: usize) -> Self {
+        DecisionTreeRegressor {
+            decision_tree_core: DecisionTreeCore::new(max_depth, SplitScoreMetrics::NegVariance),
+        }
+    }
+
+    pub fn fit(&mut self, x: &DataFrame, y: &Series) {
+        self.decision_tree_core.fit(x, y);
+    }
+
+    pub fn predict(&self, x: &DataFrame) -> Series {
+        let y_pred = Series::new("y", self.decision_tree_core.predict(x));
+
+        y_pred
     }
 }
 
@@ -662,12 +691,12 @@ mod tests {
         let y = Series::new("y", &[1, 1, 1]);
         let growth_params = TreeGrowthParameters {
             max_depth: Some(2),
-            split_score_metric: Some(SplitScoreMetrics::Entropy),
+            split_score_metric: Some(SplitScoreMetrics::NegEntropy),
         };
         let (leaf_weight, score) =
             calc_leaf_weight_and_split_score(&y, &growth_params, None, None, None);
         assert_eq!(leaf_weight, 1.0);
-        assert_eq!(score.name, "neg_entropy");
+        assert_eq!(score.name, "NegEntropy");
         assert_eq!(score.score, 0.0);
     }
 
@@ -682,7 +711,7 @@ mod tests {
         let y = Series::new("y", &[1, 1, 2]);
         let growth_params = TreeGrowthParameters {
             max_depth: Some(1),
-            split_score_metric: Some(SplitScoreMetrics::Entropy),
+            split_score_metric: Some(SplitScoreMetrics::NegEntropy),
         };
 
         let tree = grow_tree(&df, &y, &growth_params, None, 0);
@@ -705,7 +734,7 @@ mod tests {
         let y = Series::new("y", &[1, 1, 1]);
         let growth_params = TreeGrowthParameters {
             max_depth: Some(2),
-            split_score_metric: Some(SplitScoreMetrics::Entropy),
+            split_score_metric: Some(SplitScoreMetrics::NegEntropy),
         };
 
         let tree = grow_tree(&df, &y, &growth_params, None, 0);
@@ -726,7 +755,7 @@ mod tests {
         let y = Series::new("y", &[1, 1, 1, 1]);
         let growth_params = TreeGrowthParameters {
             max_depth: Some(2),
-            split_score_metric: Some(SplitScoreMetrics::Entropy),
+            split_score_metric: Some(SplitScoreMetrics::NegEntropy),
         };
         let tree = grow_tree(&df, &y, &growth_params, None, 0);
 
@@ -747,7 +776,7 @@ mod tests {
         .unwrap();
         let y = Series::new("y", &[1, 1, 1]);
 
-        let mut dtree = DecisionTreeCore::new(2);
+        let mut dtree = DecisionTreeCore::new(2, SplitScoreMetrics::NegEntropy);
         dtree.fit(&df, &y);
         let predictions = dtree.predict(&df);
         assert_eq!(predictions, Series::new("predictions", &[1.0, 1.0, 1.0]));
@@ -850,5 +879,64 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(y_proba_sum, Series::new("class_0", &[1.0, 1.0, 1.0, 1.0]));
+    }
+
+    #[test]
+    fn test_decision_tree_regressor() {
+        let df = DataFrame::new(vec![
+            Series::new("a", &[1, 2, 3]),
+            Series::new("b", &[1, 2, 3]),
+            Series::new("c", &[1, 2, 3]),
+        ])
+        .unwrap();
+        let y = Series::new("y", &[1, 1, 1]);
+
+        let mut dtree = DecisionTreeRegressor::new(2);
+        dtree.fit(&df, &y);
+        let predictions = dtree.predict(&df);
+        assert_eq!(predictions, Series::new("y", &[1, 1, 1]));
+    }
+
+    #[test]
+    fn test_decision_tree_regressor_1d() {
+        let df = DataFrame::new(vec![Series::new("a", &[1, 2, 3])]).unwrap();
+        let y = Series::new("y", &[-1, 1, 1]);
+
+        let mut dtree = DecisionTreeRegressor::new(2);
+        dtree.fit(&df, &y);
+        let predictions = dtree.predict(&df);
+        assert_eq!(predictions, Series::new("y", &[-1, 1, 1]));
+    }
+
+    #[test]
+    fn test_decision_tree_regressor_2d_case1() {
+        // is given two columns but only needs one
+        let df = DataFrame::new(vec![
+            Series::new("a", &[1, 1, 1]),
+            Series::new("b", &[1, 2, 3]),
+        ])
+        .unwrap();
+        let y = Series::new("y", &[-1, 1, 1]);
+
+        let mut dtree = DecisionTreeRegressor::new(2);
+        dtree.fit(&df, &y);
+        let predictions = dtree.predict(&df);
+        assert_eq!(predictions, Series::new("y", &[-1, 1, 1]));
+    }
+
+    #[test]
+    fn test_decision_tree_regressor_2d_case2() {
+        // is given two columns and needs both
+        let df = DataFrame::new(vec![
+            Series::new("a", &[-1, 1, -1, 1]),
+            Series::new("b", &[-1, -1, 1, 1]),
+        ])
+        .unwrap();
+        let y = Series::new("y", &[0, 1, 1, 2]);
+
+        let mut dtree = DecisionTreeRegressor::new(2);
+        dtree.fit(&df, &y);
+        let predictions = dtree.predict(&df);
+        assert_eq!(predictions, Series::new("y", &[0, 1, 1, 2]));
     }
 }

@@ -85,7 +85,7 @@ pub fn calc_neg_entropy_series(ps: &Series) -> f64 {
     neg_entropy
 }
 
-pub fn entropy_rs(y: &Series, target_groups: &Series) -> f64 {
+pub fn neg_entropy_rs(y: &Series, target_groups: &Series) -> f64 {
     let msg = "Could not cast to f64";
     let w_left: f64 = (*target_groups)
         .cast(&polars::datatypes::DataType::Float64)
@@ -119,17 +119,68 @@ pub fn entropy_rs(y: &Series, target_groups: &Series) -> f64 {
     score
 }
 
+pub fn neg_variance_rs(y: &Series, target_groups: &Series) -> f64 {
+    let msg = "Could not cast to f64";
+    let w_left: f64 = (*target_groups)
+        .cast(&polars::datatypes::DataType::Float64)
+        .expect(msg)
+        .sum::<f64>()
+        .unwrap()
+        / y.len() as f64;
+    let w_right: f64 = 1.0 - w_left;
+
+    // generate boolean chunked array of target_groups
+    let trues = Series::new("", vec![true; target_groups.len()]);
+    let target_groups = target_groups.equal(&trues).unwrap();
+
+    let variance_left: f64;
+    let variance_right: f64;
+    if w_left > 0. {
+        let y_left = y.filter(&target_groups).unwrap();
+        let ddof_left: u8 = (y_left.len() - 1).try_into().unwrap();
+        variance_left = y_left
+            .var_as_series(ddof_left)
+            .unwrap()
+            .f64()
+            .expect("not f64")
+            .get(0)
+            .expect("was null");
+    } else {
+        variance_left = 0.0;
+    }
+    if w_right > 0. {
+        let y_right = y.filter(&!target_groups).unwrap();
+        let ddof_right: u8 = (y_right.len() - 1).try_into().unwrap();
+        variance_right = y_right
+            .var_as_series(ddof_right)
+            .unwrap()
+            .f64()
+            .expect("not f64")
+            .get(0)
+            .expect("was null");
+    } else {
+        variance_right = 0.0;
+    }
+    let score = (w_left * variance_left) + (w_right * variance_right);
+    -score
+}
+
 pub fn calc_score(
     y: &Series,
     target_groups: &Series,
-    _growth_params: &TreeGrowthParameters,
+    growth_params: &TreeGrowthParameters,
     _g: Option<&Series>,
     _h: Option<&Series>,
     _incrementing_score: Option<f64>,
 ) -> f64 {
-    let score = entropy_rs(y, target_groups);
-
-    score
+    match growth_params.split_score_metric {
+        Some(SplitScoreMetrics::NegEntropy) => neg_entropy_rs(y, target_groups),
+        Some(SplitScoreMetrics::NegVariance) => neg_variance_rs(y, target_groups),
+        _ => panic!(
+            "split_score_metric {:?} not supported",
+            growth_params.split_score_metric
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -233,7 +284,7 @@ mod tests {
         let target_groups = Series::new("target_groups", vec![true; 8]);
         let growth_params = TreeGrowthParameters {
             max_depth: Some(1),
-            split_score_metric: Some(SplitScoreMetrics::Entropy),
+            split_score_metric: Some(SplitScoreMetrics::NegEntropy),
         };
         let score = calc_score(&s, &target_groups, &growth_params, None, None, None);
         assert_eq!(score, 0.0);
@@ -243,7 +294,7 @@ mod tests {
         let target_groups = Series::new("target_groups", vec![true; 8]);
         let growth_params = TreeGrowthParameters {
             max_depth: Some(1),
-            split_score_metric: Some(SplitScoreMetrics::Entropy),
+            split_score_metric: Some(SplitScoreMetrics::NegEntropy),
         };
         let score = calc_score(&s, &target_groups, &growth_params, None, None, None);
         assert_eq!(score, -1.0);
@@ -253,7 +304,7 @@ mod tests {
         let target_groups = Series::new("target_groups", vec![true; 8]);
         let growth_params = TreeGrowthParameters {
             max_depth: Some(1),
-            split_score_metric: Some(SplitScoreMetrics::Entropy),
+            split_score_metric: Some(SplitScoreMetrics::NegEntropy),
         };
         let score = calc_score(&s, &target_groups, &growth_params, None, None, None);
         assert_eq!(score, -3.0);
@@ -266,7 +317,7 @@ mod tests {
         );
         let growth_params = TreeGrowthParameters {
             max_depth: Some(1),
-            split_score_metric: Some(SplitScoreMetrics::Entropy),
+            split_score_metric: Some(SplitScoreMetrics::NegEntropy),
         };
         let score = calc_score(&s, &target_groups, &growth_params, None, None, None);
         assert_eq!(score, 0.0);
@@ -279,7 +330,7 @@ mod tests {
         );
         let growth_params = TreeGrowthParameters {
             max_depth: Some(1),
-            split_score_metric: Some(SplitScoreMetrics::Entropy),
+            split_score_metric: Some(SplitScoreMetrics::NegEntropy),
         };
         let score = calc_score(&s, &target_groups, &growth_params, None, None, None);
         assert_eq!(score, -1.0);
@@ -291,19 +342,19 @@ mod tests {
         let values = vec![0, 0, 0, 0, 0, 0, 0, 0];
         let s = Series::new("y", values);
         let target_groups = Series::new("target_groups", vec![true; 8]);
-        let score = entropy_rs(&s, &target_groups);
+        let score = neg_entropy_rs(&s, &target_groups);
         assert_eq!(score, 0.0);
 
         let values = vec![0, 1, 0, 1, 0, 1, 0, 1];
         let s = Series::new("y", values);
         let target_groups = Series::new("target_groups", vec![true; 8]);
-        let score = entropy_rs(&s, &target_groups);
+        let score = neg_entropy_rs(&s, &target_groups);
         assert_eq!(score, -1.0);
 
         let values = vec![0, 1, 2, 3, 4, 5, 6, 7];
         let s = Series::new("y", values);
         let target_groups = Series::new("target_groups", vec![true; 8]);
-        let score = entropy_rs(&s, &target_groups);
+        let score = neg_entropy_rs(&s, &target_groups);
         assert_eq!(score, -3.0);
 
         let values = vec![0, 0, 0, 0, 0, 0, 0, 0];
@@ -312,7 +363,7 @@ mod tests {
             "target_groups",
             vec![true, true, true, true, false, false, false, false],
         );
-        let score = entropy_rs(&s, &target_groups);
+        let score = neg_entropy_rs(&s, &target_groups);
         assert_eq!(score, 0.0);
 
         let values = vec![0, 1, 0, 1, 0, 1, 0, 1];
@@ -321,7 +372,47 @@ mod tests {
             "target_groups",
             vec![true, true, true, true, false, false, false, false],
         );
-        let score = entropy_rs(&s, &target_groups);
+        let score = neg_entropy_rs(&s, &target_groups);
         assert_eq!(score, -1.0);
+    }
+
+    // test neg_variance_rs
+    #[test]
+    fn test_neg_variance_rs() {
+        let values = vec![0, 0, 0, 0, 0, 0, 0, 0];
+        let s = Series::new("y", values);
+        let target_groups = Series::new("target_groups", vec![true; 8]);
+        let score = neg_variance_rs(&s, &target_groups);
+        assert_eq!(score, 0.0);
+
+        let values = vec![0, 1, 0, 1, 0, 1, 0, 1];
+        let s = Series::new("y", values);
+        let target_groups = Series::new("target_groups", vec![true; 8]);
+        let score = neg_variance_rs(&s, &target_groups);
+        assert_eq!(score, -2.);
+
+        let values = vec![0, 1, 2, 3, 4, 5, 6, 7];
+        let s = Series::new("y", values);
+        let target_groups = Series::new("target_groups", vec![true; 8]);
+        let score = neg_variance_rs(&s, &target_groups);
+        assert_eq!(score, -42.);
+
+        let values = vec![0, 0, 0, 0, 0, 0, 0, 0];
+        let s = Series::new("y", values);
+        let target_groups = Series::new(
+            "target_groups",
+            vec![true, true, true, true, false, false, false, false],
+        );
+        let score = neg_variance_rs(&s, &target_groups);
+        assert_eq!(score, 0.0);
+
+        let values = vec![0, 1, 0, 1, 0, 1, 0, 1];
+        let s = Series::new("y", values);
+        let target_groups = Series::new(
+            "target_groups",
+            vec![true, true, true, true, false, false, false, false],
+        );
+        let score = neg_variance_rs(&s, &target_groups);
+        assert_eq!(score, -1.);
     }
 }
