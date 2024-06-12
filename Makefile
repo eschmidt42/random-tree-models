@@ -8,6 +8,7 @@ help:
 	@echo "compile : update the environment requirements after changes to dependencies in pyproject.toml."
 	@echo "update  : pip install new requriements into the virtual environment."
 	@echo "test    : run pytests."
+	@echo "format  : format rust code."
 
 # create a virtual environment
 .PHONY: venv
@@ -59,3 +60,11 @@ update:
 test:
 	source .venv/bin/activate && \
 	pytest -vx .
+
+# ==============================================================================
+# format code
+# ==============================================================================
+
+.PHONY: format
+format:
+	cargo fmt

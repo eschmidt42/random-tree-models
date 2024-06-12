@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import typing as T
 
 import numpy as np
@@ -7,6 +8,7 @@ from sklearn import base
 from sklearn.utils.validation import check_array, check_is_fitted
 
 import random_tree_models.decisiontree as dtree
+import random_tree_models.scoring as scoring
 
 
 # TODO: add tests
@@ -60,13 +62,14 @@ class IsolationTree(dtree.DecisionTreeTemplate, base.OutlierMixin):
         _X, _y, self.ix_features_ = self._select_samples_and_features(
             X, dummy_y
         )
+        self.incrementing_score_ = scoring.IncrementingScore()
 
         self.tree_ = dtree.grow_tree(
             _X,
             _y,
-            measure_name=self.measure_name,
             growth_params=self.growth_params_,
             random_state=self.random_state,
+            incrementing_score=self.incrementing_score_,
             **kwargs,
         )
 
