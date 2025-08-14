@@ -13,7 +13,7 @@ dependencies = [
     "rich>=13.3.5",
     "scikit-learn>=1.2.2",
     "seaborn>=0.12.2",
-    
+
 ]
 
 [project.scripts]
@@ -38,4 +38,5 @@ dev = [
     "jupyterlab>=4.0.0",
     "pre-commit>=3.3.2",
     "snakeviz>=2.2.0",
+    "pip-audit>=2.9.0",
 ]
