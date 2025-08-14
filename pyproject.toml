@@ -1,7 +1,7 @@
 [project]
 name = "random-tree-models"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.6.3"
+description = "Implementation of a random selection of tree based models."
 readme = "README.md"
 authors = [
     { name = "eschmidt42", email = "11818904+eschmidt42@users.noreply.github.com" }
