@@ -4,7 +4,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 // compute gini impurity of an array of discrete values
-#[pyfunction(name = "gini_impurity")]
+#[pyfunction(name = "rs_gini_impurity")]
 pub fn gini_impurity_py(values: Vec<usize>) -> PyResult<f64> {
     // if values if empty raise pyvalueerror
     if values.is_empty() {
@@ -31,7 +31,7 @@ fn gini_impurity(values: Vec<usize>) -> f64 {
 }
 
 // pyo3 handle of entropy function
-#[pyfunction(name = "entropy")]
+#[pyfunction(name = "rs_entropy")]
 pub fn entropy_py(values: Vec<usize>) -> PyResult<f64> {
     // if values if empty raise pyvalueerror
     if values.is_empty() {

@@ -4,7 +4,7 @@ from functools import partial
 import numpy as np
 
 import random_tree_models.utils as utils
-from random_tree_models import scoring_rs
+from random_tree_models import rs_gini_impurity, rs_entropy
 
 
 def check_y_and_target_groups(y: np.ndarray, target_groups: np.ndarray = None):
@@ -83,8 +83,8 @@ def calc_entropy_rs(
     w_left = target_groups.sum() / len(target_groups)
     w_right = 1.0 - w_left
 
-    h_left = scoring_rs.entropy(y[target_groups]) if w_left > 0 else 0
-    h_right = scoring_rs.entropy(y[~target_groups]) if w_right > 0 else 0
+    h_left = rs_entropy(y[target_groups]) if w_left > 0 else 0
+    h_right = rs_entropy(y[~target_groups]) if w_right > 0 else 0
 
     h = w_left * h_left + w_right * h_right
     return h
@@ -146,8 +146,8 @@ def calc_gini_impurity_rs(
     w_left = target_groups.sum() / len(target_groups)
     w_right = 1.0 - w_left
 
-    g_left = scoring_rs.gini_impurity(y[target_groups]) if w_left > 0 else 0
-    g_right = scoring_rs.gini_impurity(y[~target_groups]) if w_right > 0 else 0
+    g_left = rs_gini_impurity(y[target_groups]) if w_left > 0 else 0
+    g_right = rs_gini_impurity(y[~target_groups]) if w_right > 0 else 0
 
     g = w_left * g_left + w_right * g_right
     return g
