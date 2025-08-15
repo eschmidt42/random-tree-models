@@ -3,7 +3,7 @@ import pytest
 
 import random_tree_models.scoring as scoring
 import random_tree_models.utils as utils
-from random_tree_models import scoring_rs
+from random_tree_models import rs_entropy, rs_gini_impurity
 
 
 @pytest.mark.parametrize(
@@ -97,7 +97,7 @@ def test_entropy(y: np.ndarray):
 def test_entropy_rs(y: np.ndarray):
     try:
         # line to test
-        h = scoring_rs.entropy(y)
+        h = rs_entropy(y)
     except ValueError as ex:
         if len(y) == 0:
             pytest.xfail("entropy properly failed because of empty y")
@@ -203,7 +203,7 @@ def test_gini_impurity(y: np.ndarray):
 def test_gini_impurity_rs(y: np.ndarray):
     try:
         # line to test
-        g = scoring_rs.gini_impurity(y)
+        g = rs_gini_impurity(y)
     except ValueError as ex:
         if len(y) == 0:
             pytest.xfail("gini_impurity properly failed because of empty y")
@@ -225,7 +225,7 @@ def test_gini_impurity_rs(y: np.ndarray):
 )
 def test_gini_impurity_py_vs_rs(y: np.ndarray):
     g_py = scoring.gini_impurity(y)
-    g_rs = scoring_rs.gini_impurity(y)
+    g_rs = rs_gini_impurity(y)
 
     assert np.isclose(g_py, g_rs)
 

@@ -40,10 +40,7 @@ class TestExtraTreesRegressor:
         model = et.ExtraTreesRegressor()
         model.fit(self.X, self.y)
         assert all(
-            [
-                isinstance(model, dtree.DecisionTreeRegressor)
-                for model in model.trees_
-            ]
+            [isinstance(model, dtree.DecisionTreeRegressor) for model in model.trees_]
         )
 
     def test_predict(self):
@@ -74,10 +71,7 @@ class TestXGBoostClassifier:
         model.fit(self.X, self.y)
         assert not hasattr(self.model, "classes_")
         assert all(
-            [
-                isinstance(model, dtree.DecisionTreeClassifier)
-                for model in model.trees_
-            ]
+            [isinstance(model, dtree.DecisionTreeClassifier) for model in model.trees_]
         )
 
     def test_predict(self):
@@ -87,7 +81,6 @@ class TestXGBoostClassifier:
         assert (predictions == self.y).all()
 
 
-@pytest.mark.slow
 @parametrize_with_checks([et.ExtraTreesRegressor(), et.ExtraTreesClassifier()])
 def test_extratrees_estimators_with_sklearn_checks(estimator, check):
     """Test of estimators using scikit-learn test suite

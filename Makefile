@@ -6,7 +6,7 @@ help:
 	@echo "venv    : creates the virtual environment in .venv."
 	@echo "install : install dependencies into virtual environment."
 	@echo "compile : update the environment requirements after changes to dependencies in pyproject.toml."
-	@echo "update  : pip install new requriements into the virtual environment."
+	@echo "update  : Install new requriements into the virtual environment."
 	@echo "test    : run pytests."
 
 # create a virtual environment
@@ -47,9 +47,7 @@ compile:
 
 .PHONY: update
 update:
-	source .venv/bin/activate && \
-	pip-sync $(req-file) && \
-	pip install -e .
+	uv sync --reinstall
 
 # ==============================================================================
 # run tests
@@ -57,5 +55,4 @@ update:
 
 .PHONY: test
 test:
-	source .venv/bin/activate && \
-	pytest -vx .
+	uv run pytest -vx .
