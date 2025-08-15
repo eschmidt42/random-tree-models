@@ -1,4 +1,4 @@
-from enum import Enum, member
+from enum import StrEnum, auto
 
 import numpy as np
 
@@ -207,28 +207,101 @@ class IncrementingScore:
         return self.score
 
 
-class SplitScoreMetrics(Enum):
-    # https://stackoverflow.com/questions/40338652/how-to-define-enum-values-that-are-functions
-    variance = member(calc_variance)
-    entropy = member(calc_entropy)
-    entropy_rs = member(calc_entropy_rs)
-    gini = member(calc_gini_impurity)
-    gini_rs = member(calc_gini_impurity_rs)
+INC_SCORE = 0
+
+
+def calc_incrementing_score() -> float:
+    global INC_SCORE
+    INC_SCORE += 1
+    return INC_SCORE
+
+
+def reset_incrementing_score():
+    global INC_SCORE
+    INC_SCORE = 0
+
+
+class SplitScoreMetrics(StrEnum):
+    variance = auto()
+    entropy = auto()
+    entropy_rs = auto()
+    gini = auto()
+    gini_rs = auto()
     # variance for split score because Friedman et al. 2001 in Algorithm 1
     # step 4 minimize the squared error between actual and predicted dloss/dyhat
-    friedman_binary_classification = member(calc_variance)
-    xgboost = member(calc_xgboost_split_score)
-    incrementing = member(IncrementingScore())
+    friedman_binary_classification = auto()
+    xgboost = auto()
+    incrementing = auto()
 
-    def __call__(
-        self,
-        y: np.ndarray,
-        target_groups: np.ndarray,
-        yhat: np.ndarray | None = None,
-        g: np.ndarray | None = None,
-        h: np.ndarray | None = None,
-        growth_params: utils.TreeGrowthParameters | None = None,
-    ) -> float:
-        return self.value(
-            y, target_groups, yhat=yhat, g=g, h=h, growth_params=growth_params
-        )
+
+def calc_split_score(
+    metric: SplitScoreMetrics,
+    y: np.ndarray,
+    target_groups: np.ndarray,
+    yhat: np.ndarray | None = None,
+    g: np.ndarray | None = None,
+    h: np.ndarray | None = None,
+    growth_params: utils.TreeGrowthParameters | None = None,
+) -> float:
+    match metric:
+        case SplitScoreMetrics.variance:
+            return calc_variance(
+                y, target_groups, yhat=yhat, g=g, h=h, growth_params=growth_params
+            )
+        case SplitScoreMetrics.entropy:
+            return calc_entropy(
+                y, target_groups, yhat=yhat, g=g, h=h, growth_params=growth_params
+            )
+        case SplitScoreMetrics.entropy_rs:
+            return calc_entropy_rs(
+                y, target_groups, yhat=yhat, g=g, h=h, growth_params=growth_params
+            )
+        case SplitScoreMetrics.gini:
+            return calc_gini_impurity(
+                y, target_groups, yhat=yhat, g=g, h=h, growth_params=growth_params
+            )
+        case SplitScoreMetrics.gini_rs:
+            return calc_gini_impurity_rs(
+                y, target_groups, yhat=yhat, g=g, h=h, growth_params=growth_params
+            )
+        case SplitScoreMetrics.friedman_binary_classification:
+            return calc_variance(
+                y, target_groups, yhat=yhat, g=g, h=h, growth_params=growth_params
+            )
+        case SplitScoreMetrics.xgboost:
+            return calc_xgboost_split_score(
+                y, target_groups, yhat=yhat, g=g, h=h, growth_params=growth_params
+            )
+        case SplitScoreMetrics.incrementing:
+            return calc_incrementing_score()
+        case _:
+            raise NotImplementedError(
+                f"calc_split_score is not implemented for {metric=}."
+            )
+
+
+# class SplitScoreMetrics(Enum):
+#     # https://stackoverflow.com/questions/40338652/how-to-define-enum-values-that-are-functions
+#     variance = member(calc_variance)
+#     entropy = member(calc_entropy)
+#     entropy_rs = member(calc_entropy_rs)
+#     gini = member(calc_gini_impurity)
+#     gini_rs = member(calc_gini_impurity_rs)
+#     # variance for split score because Friedman et al. 2001 in Algorithm 1
+#     # step 4 minimize the squared error between actual and predicted dloss/dyhat
+#     friedman_binary_classification = member(calc_variance)
+#     xgboost = member(calc_xgboost_split_score)
+#     incrementing = member(IncrementingScore())
+
+#     def __call__(
+#         self,
+#         y: np.ndarray,
+#         target_groups: np.ndarray,
+#         yhat: np.ndarray | None = None,
+#         g: np.ndarray | None = None,
+#         h: np.ndarray | None = None,
+#         growth_params: utils.TreeGrowthParameters | None = None,
+#     ) -> float:
+#         return self.value(
+#             y, target_groups, yhat=yhat, g=g, h=h, growth_params=growth_params
+#         )

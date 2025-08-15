@@ -221,7 +221,8 @@ def find_best_split(
         ) in get_thresholds_and_target_groups(
             feature_values, growth_params.threshold_params, rng
         ):
-            split_score = scoring.SplitScoreMetrics[measure_name](
+            split_score = scoring.calc_split_score(
+                scoring.SplitScoreMetrics(measure_name),
                 y,
                 target_groups,
                 yhat=yhat,
@@ -286,7 +287,8 @@ def calc_leaf_weight_and_split_score(
     leaf_weight = leafweights.calc_leaf_weight(y, measure_name, growth_params, g=g, h=h)
 
     yhat = leaf_weight * np.ones_like(y)
-    score = scoring.SplitScoreMetrics[measure_name](
+    score = scoring.calc_split_score(
+        scoring.SplitScoreMetrics(measure_name),
         y,
         np.ones_like(y, dtype=bool),
         yhat=yhat,
@@ -363,6 +365,8 @@ def grow_tree(
     is_baselevel, reason = check_is_baselevel(
         y, depth, max_depth=growth_params.max_depth
     )
+    if parent_node is None:
+        scoring.reset_incrementing_score()
 
     # compute leaf weight (for prediction) and node score (for split gain check)
     leaf_weight, score = calc_leaf_weight_and_split_score(

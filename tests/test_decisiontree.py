@@ -872,7 +872,7 @@ def test_calc_leaf_weight_and_split_score():
             return_value=leaf_weight_exp,
         ) as mock_calc_leaf_weight,
         patch(
-            "random_tree_models.decisiontree.scoring.SplitScoreMetrics.__call__",
+            "random_tree_models.decisiontree.scoring.calc_split_score",
             return_value=score_exp,
         ) as mock_SplitScoreMetrics,
     ):
