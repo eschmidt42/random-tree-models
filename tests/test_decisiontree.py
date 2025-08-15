@@ -10,6 +10,7 @@ from sklearn.utils.estimator_checks import parametrize_with_checks
 import random_tree_models.decisiontree as dtree
 import random_tree_models.utils as utils
 from random_tree_models import scoring
+from random_tree_models.scoring import MetricNames
 from random_tree_models.utils import ThresholdSelectionMethod
 
 # first value in each tuple is the value to test and the second is the flag indicating if this should work
@@ -1142,7 +1143,7 @@ def test_predict_with_tree():
 
 
 class TestDecisionTreeTemplate:
-    model = dtree.DecisionTreeTemplate()
+    model = dtree.DecisionTreeTemplate(measure_name=MetricNames.entropy)
     X = np.random.normal(size=(100, 10))
     y = np.random.normal(size=(100,))
 
@@ -1297,12 +1298,21 @@ class TestDecisionTreeClassifier:
         assert (predictions == self.y).all()
 
 
+def expected_failed_checks(check) -> dict[str, str]:
+    return {
+        "check_do_not_raise_errors_in_init_or_set_params": "measure_name and similar parameters are Enums, this seems to not be expected by sklearn.",
+        "check_parameters_default_constructible": "measure_name and similar parameters are Enums, this seems to not be expected by sklearn.",
+    }
+
+
 @parametrize_with_checks(
-    [dtree.DecisionTreeRegressor(), dtree.DecisionTreeClassifier()]
+    [dtree.DecisionTreeRegressor(), dtree.DecisionTreeClassifier()],
+    expected_failed_checks=expected_failed_checks,  # type: ignore
 )
 def test_dtree_estimators_with_sklearn_checks(estimator, check):
     """Test of estimators using scikit-learn test suite
 
     Reference: https://scikit-learn.org/stable/modules/generated/sklearn.utils.estimator_checks.parametrize_with_checks.html#sklearn.utils.estimator_checks.parametrize_with_checks
     """
+
     check(estimator)

@@ -1,4 +1,5 @@
 from enum import StrEnum, auto
+from typing import Literal
 
 import numpy as np
 
@@ -232,6 +233,18 @@ class MetricNames(StrEnum):
     friedman_binary_classification = auto()
     xgboost = auto()
     incrementing = auto()
+
+
+MetricNameLiterals = Literal[
+    "variance",
+    "entropy",
+    "entropy_rs",
+    "gini",
+    "gini_rs",
+    "friedman_binary_classification",
+    "xgboost",
+    "incrementing",
+]
 
 
 def calc_split_score(
