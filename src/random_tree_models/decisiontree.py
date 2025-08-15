@@ -2,7 +2,6 @@ import typing as T
 import uuid
 
 import numpy as np
-import pandas as pd
 import sklearn.base as base
 from pydantic import (
     ConfigDict,
@@ -519,6 +518,7 @@ class DecisionTreeTemplate(base.BaseEstimator):
     column_method: utils.ColumnSelectionMethod
     n_columns_to_try: int | None
     ensure_all_finite: bool
+    tree_: Node
 
     def __init__(
         self,
@@ -606,12 +606,12 @@ class DecisionTreeTemplate(base.BaseEstimator):
 
     def fit(
         self,
-        X: T.Union[pd.DataFrame, np.ndarray],
-        y: T.Union[pd.Series, np.ndarray],
+        X: np.ndarray,
+        y: np.ndarray,
     ) -> "DecisionTreeTemplate":
         raise NotImplementedError()
 
-    def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
 
@@ -656,8 +656,8 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
 
     def fit(
         self,
-        X: T.Union[pd.DataFrame, np.ndarray],
-        y: T.Union[pd.Series, np.ndarray],
+        X: np.ndarray,
+        y: np.ndarray,
         **kwargs,
     ) -> "DecisionTreeRegressor":
         self._organize_growth_parameters()
@@ -678,13 +678,10 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
 
         return self
 
-    def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("tree_", "growth_params_"))
 
         X = validate_data(self, X, reset=False)
-        # X = check_array(X, force_all_finite=self.ensure_all_finite)
-        # if X.shape[1] != self.n_features_in_:
-        #     raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
         _X = self._select_features(X, self.ix_features_)
 
@@ -740,20 +737,20 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
 
     def __sklearn_tags__(self):
         # https://scikit-learn.org/stable/developers/develop.html
-        tags = super().__sklearn_tags__()
+        tags = super().__sklearn_tags__()  # type: ignore
         tags.classifier_tags.multi_class = False
         return tags
 
     def fit(
         self,
-        X: T.Union[pd.DataFrame, np.ndarray],
-        y: T.Union[pd.Series, np.ndarray],
+        X: np.ndarray,
+        y: np.ndarray,
     ) -> "DecisionTreeClassifier":
         X, y = validate_data(self, X, y)
-        # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
+
         check_classification_targets(y)
 
-        y_type = type_of_target(y, input_name="y", raise_unknown=True)
+        y_type = type_of_target(y, input_name="y", raise_unknown=True)  # type: ignore
         if y_type != "binary":
             raise ValueError(
                 "Only binary classification is supported. The type of the target "
@@ -765,7 +762,6 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
 
         self._organize_growth_parameters()
 
-        # self.n_features_in_ = X.shape[1]
         self.classes_, y = np.unique(y, return_inverse=True)
 
         _X, _y, self.ix_features_ = self._select_samples_and_features(X, y)
@@ -780,12 +776,9 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
 
         return self
 
-    def predict_proba(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("tree_", "classes_", "growth_params_"))
         X = validate_data(self, X, reset=False)
-        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
-        # if X.shape[1] != self.n_features_in_:
-        #     raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
         _X = self._select_features(X, self.ix_features_)
 
@@ -793,7 +786,7 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
         proba = np.array([1 - proba, proba]).T
         return proba
 
-    def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         proba = self.predict_proba(X)
         ix = np.argmax(proba, axis=1)
         y = self.classes_[ix]
@@ -802,7 +795,10 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
 
 
 def walk_tree(
-    decision_tree: Node, tree: Tree, parent: Node = None, is_left: bool = None
+    decision_tree: Node,
+    tree: Tree,
+    parent: Node | None = None,
+    is_left: bool | None = None,
 ):
     arrow = (
         ""
