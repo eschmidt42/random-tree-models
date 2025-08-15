@@ -1,5 +1,4 @@
-from enum import Enum
-from functools import partial
+from enum import Enum, member
 
 import numpy as np
 
@@ -35,16 +34,16 @@ def leaf_weight_xgboost(
 
 class LeafWeightSchemes(Enum):
     # https://stackoverflow.com/questions/40338652/how-to-define-enum-values-that-are-functions
-    friedman_binary_classification = partial(
+    friedman_binary_classification = member(
         leaf_weight_binary_classification_friedman2001
     )
-    variance = partial(leaf_weight_mean)
-    entropy = partial(leaf_weight_mean)
-    entropy_rs = partial(leaf_weight_mean)
-    gini = partial(leaf_weight_mean)
-    gini_rs = partial(leaf_weight_mean)
-    xgboost = partial(leaf_weight_xgboost)
-    incrementing = partial(leaf_weight_mean)
+    variance = member(leaf_weight_mean)
+    entropy = member(leaf_weight_mean)
+    entropy_rs = member(leaf_weight_mean)
+    gini = member(leaf_weight_mean)
+    gini_rs = member(leaf_weight_mean)
+    xgboost = member(leaf_weight_xgboost)
+    incrementing = member(leaf_weight_mean)
 
     def __call__(
         self,

@@ -166,7 +166,7 @@ class TestTreeGrowthParameters:
                 pytest.fail(f"init with {frac_subsamples=} should fail: {ex}")
         else:
             if fail:
-                pytest.fail(f"init with {frac_subsamples=} should fail: {ex}")
+                pytest.fail(f"init with {frac_subsamples=} should fail")
 
     @pytest.mark.parametrize(
         "frac_features,fail",
