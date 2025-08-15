@@ -1,23 +1,32 @@
 import typing as T
 
 import numpy as np
-import pandas as pd
 from rich.progress import track
 from sklearn import base
 from sklearn.utils.multiclass import check_classification_targets, type_of_target
 from sklearn.utils.validation import (
     check_is_fitted,
-    validate_data,
+    validate_data,  # type: ignore
 )
 
 import random_tree_models.decisiontree as dtree
+from random_tree_models.scoring import MetricNames
 
 
 class RandomForestTemplate(base.BaseEstimator):
+    measure_name: MetricNames
+    n_trees: int
+    max_depth: int
+    min_improvement: float
+    ensure_all_finite: bool
+    frac_subsamples: float
+    frac_features: float
+    random_state: int
+
     def __init__(
         self,
+        measure_name: MetricNames = MetricNames.variance,
         n_trees: int = 3,
-        measure_name: str = None,
         max_depth: int = 2,
         min_improvement: float = 0.0,
         ensure_all_finite: bool = True,
@@ -37,12 +46,12 @@ class RandomForestTemplate(base.BaseEstimator):
 
     def fit(
         self,
-        X: T.Union[pd.DataFrame, np.ndarray],
-        y: T.Union[pd.Series, np.ndarray],
+        X: np.ndarray,
+        y: np.ndarray,
     ):
         raise NotImplementedError()
 
-    def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
 
@@ -55,7 +64,7 @@ class RandomForestRegressor(base.RegressorMixin, RandomForestTemplate):
 
     def __init__(
         self,
-        measure_name: str = "variance",
+        measure_name: MetricNames = MetricNames.variance,
         n_trees: int = 3,
         max_depth: int = 2,
         min_improvement: float = 0.0,
@@ -76,14 +85,11 @@ class RandomForestRegressor(base.RegressorMixin, RandomForestTemplate):
         )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "RandomForestRegressor":
-        # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
-        X, y = validate_data(self, X, y)
-        # self.n_features_in_ = X.shape[1]
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
 
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
         rng = np.random.RandomState(self.random_state)
         for _ in track(range(self.n_trees), total=self.n_trees, description="tree"):
-            # train decision tree to predict differences
             new_tree = dtree.DecisionTreeRegressor(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
@@ -100,10 +106,8 @@ class RandomForestRegressor(base.RegressorMixin, RandomForestTemplate):
 
     def predict(self, X: np.ndarray, aggregation: str = "mean") -> np.ndarray:
         check_is_fitted(self, ("trees_", "n_features_in_"))
-        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
-        X = validate_data(self, X, reset=False)
-        if X.shape[1] != self.n_features_in_:
-            raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
+
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         y = np.zeros((X.shape[0], self.n_trees), dtype=float)
 
@@ -129,7 +133,7 @@ class RandomForestClassifier(base.ClassifierMixin, RandomForestTemplate):
 
     def __init__(
         self,
-        measure_name: str = "gini",
+        measure_name: MetricNames = MetricNames.gini,
         n_trees: int = 3,
         max_depth: int = 2,
         min_improvement: float = 0.0,
@@ -158,16 +162,15 @@ class RandomForestClassifier(base.ClassifierMixin, RandomForestTemplate):
 
     def __sklearn_tags__(self):
         # https://scikit-learn.org/stable/developers/develop.html
-        tags = super().__sklearn_tags__()
+        tags = super().__sklearn_tags__()  # type: ignore
         tags.classifier_tags.multi_class = False
         return tags
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "RandomForestClassifier":
-        # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
-        X, y = validate_data(self, X, y)
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
         check_classification_targets(y)
 
-        y_type = type_of_target(y, input_name="y", raise_unknown=True)
+        y_type = type_of_target(y, input_name="y", raise_unknown=True)  # type: ignore
         if y_type != "binary":
             raise ValueError(
                 "Only binary classification is supported. The type of the target "
@@ -177,9 +180,8 @@ class RandomForestClassifier(base.ClassifierMixin, RandomForestTemplate):
         if len(np.unique(y)) == 1:
             raise ValueError("Cannot train with only one class present")
 
-        # self.n_features_in_ = X.shape[1]
         self.classes_, y = np.unique(y, return_inverse=True)
-        self.trees_: T.List[dtree.DecisionTreeRegressor] = []
+        self.trees_: T.List[dtree.DecisionTreeClassifier] = []
 
         rng = np.random.RandomState(self.random_state)
         for _ in track(range(self.n_trees), description="tree", total=self.n_trees):
@@ -197,15 +199,10 @@ class RandomForestClassifier(base.ClassifierMixin, RandomForestTemplate):
 
         return self
 
-    def predict_proba(
-        self, X: T.Union[pd.DataFrame, np.ndarray], aggregation: str = "mean"
-    ) -> np.ndarray:
+    def predict_proba(self, X: np.ndarray, aggregation: str = "mean") -> np.ndarray:
         check_is_fitted(self, ("trees_", "classes_", "n_features_in_"))
 
-        X = validate_data(self, X, reset=False)
-        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
-        if X.shape[1] != self.n_features_in_:
-            raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         proba = np.zeros((X.shape[0], self.n_trees, len(self.classes_)), dtype=float)
 

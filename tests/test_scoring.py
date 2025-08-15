@@ -45,9 +45,7 @@ def test_check_y_and_target_groups(y, target_groups, is_bad):
         (np.array([1, 1, 2, 2]), np.array([False, True, False, True]), -0.25),
     ],
 )
-def test_calc_variance(
-    y: np.ndarray, target_groups: np.ndarray, variance_exp: float
-):
+def test_calc_variance(y: np.ndarray, target_groups: np.ndarray, variance_exp: float):
     try:
         # line to test
         variance = scoring.calc_variance(y, target_groups)
@@ -97,7 +95,7 @@ def test_entropy(y: np.ndarray):
 def test_entropy_rs(y: np.ndarray):
     try:
         # line to test
-        h = rs_entropy(y)
+        h = rs_entropy(y.tolist())
     except ValueError as ex:
         if len(y) == 0:
             pytest.xfail("entropy properly failed because of empty y")
@@ -151,9 +149,7 @@ def test_calc_entropy(y: np.ndarray, target_groups: np.ndarray, h_exp: float):
         (np.array([1, 1, 2, 2]), np.array([False, True, False, True]), -1.0),
     ],
 )
-def test_calc_entropy_rs(
-    y: np.ndarray, target_groups: np.ndarray, h_exp: float
-):
+def test_calc_entropy_rs(y: np.ndarray, target_groups: np.ndarray, h_exp: float):
     try:
         # line to test
         h = scoring.calc_entropy_rs(y, target_groups)
@@ -203,7 +199,7 @@ def test_gini_impurity(y: np.ndarray):
 def test_gini_impurity_rs(y: np.ndarray):
     try:
         # line to test
-        g = rs_gini_impurity(y)
+        g = rs_gini_impurity(y.tolist())
     except ValueError as ex:
         if len(y) == 0:
             pytest.xfail("gini_impurity properly failed because of empty y")
@@ -225,7 +221,7 @@ def test_gini_impurity_rs(y: np.ndarray):
 )
 def test_gini_impurity_py_vs_rs(y: np.ndarray):
     g_py = scoring.gini_impurity(y)
-    g_rs = rs_gini_impurity(y)
+    g_rs = rs_gini_impurity(y.tolist())
 
     assert np.isclose(g_py, g_rs)
 
@@ -243,9 +239,7 @@ def test_gini_impurity_py_vs_rs(y: np.ndarray):
         (np.array([1, 1, 2, 2]), np.array([False, True, False, True]), -0.5),
     ],
 )
-def test_calc_gini_impurity(
-    y: np.ndarray, target_groups: np.ndarray, g_exp: float
-):
+def test_calc_gini_impurity(y: np.ndarray, target_groups: np.ndarray, g_exp: float):
     try:
         # line to test
         g = scoring.calc_gini_impurity(y, target_groups)
@@ -273,9 +267,7 @@ def test_calc_gini_impurity(
         (np.array([1, 1, 2, 2]), np.array([False, True, False, True]), -0.5),
     ],
 )
-def test_calc_gini_impurity_rs(
-    y: np.ndarray, target_groups: np.ndarray, g_exp: float
-):
+def test_calc_gini_impurity_rs(y: np.ndarray, target_groups: np.ndarray, g_exp: float):
     try:
         # line to test
         g = scoring.calc_gini_impurity_rs(y, target_groups)
@@ -307,9 +299,7 @@ def test_xgboost_split_score(g: np.ndarray, h: np.ndarray, is_bad: bool):
         score = scoring.xgboost_split_score(g, h, growth_params)
     except ValueError as ex:
         if is_bad:
-            pytest.xfail(
-                "xgboost_split_score properly failed because of empty g or h"
-            )
+            pytest.xfail("xgboost_split_score properly failed because of empty g or h")
         else:
             raise ex
     else:
@@ -362,9 +352,7 @@ def test_calc_xgboost_split_score(
     y = None
     try:
         # line to test
-        score = scoring.calc_xgboost_split_score(
-            y, target_groups, g, h, growth_params
-        )
+        score = scoring.calc_xgboost_split_score(target_groups, g, h, growth_params)
     except ValueError as ex:
         if score_exp is None:
             pytest.xfail("Properly raised error calculating the xgboost score")
@@ -372,14 +360,13 @@ def test_calc_xgboost_split_score(
             raise ex
     else:
         if score_exp is None:
-            pytest.fail(
-                "calc_xgboost_split_score should have failed but didn't"
-            )
+            pytest.fail("calc_xgboost_split_score should have failed but didn't")
         assert score == score_exp
 
 
 class TestSplitScoreMetrics:
     "Redudancy test - calling calc_xgboost_split_score etc via SplitScoreMetrics needs to yield the same values as in the test above."
+
     y = np.array([1, 1, 2, 2])
     target_groups = np.array([False, True, False, True])
 
@@ -388,29 +375,49 @@ class TestSplitScoreMetrics:
     var_exp = -0.25
 
     def test_gini(self):
-        g = scoring.SplitScoreMetrics["gini"](self.y, self.target_groups)
+        g = scoring.calc_split_score(
+            scoring.MetricNames.gini, self.y, self.target_groups
+        )
+        # g = scoring.SplitScoreMetrics["gini"](self.y, self.target_groups)
         assert g == self.g_exp
 
     def test_gini_rs(self):
-        g = scoring.SplitScoreMetrics["gini_rs"](self.y, self.target_groups)
+        g = scoring.calc_split_score(
+            scoring.MetricNames.gini_rs, self.y, self.target_groups
+        )
+        # g = scoring.SplitScoreMetrics["gini_rs"](self.y, self.target_groups)
         assert g == self.g_exp
 
     def test_entropy(self):
-        h = scoring.SplitScoreMetrics["entropy"](self.y, self.target_groups)
+        h = scoring.calc_split_score(
+            scoring.MetricNames.entropy, self.y, self.target_groups
+        )
+        # h = scoring.SplitScoreMetrics["entropy"](self.y, self.target_groups)
         assert h == self.h_exp
 
-    def test_entropy(self):
-        h = scoring.SplitScoreMetrics["entropy_rs"](self.y, self.target_groups)
+    def test_entropy_rs(self):
+        h = scoring.calc_split_score(
+            scoring.MetricNames.entropy_rs, self.y, self.target_groups
+        )
+        # h = scoring.SplitScoreMetrics["entropy_rs"](self.y, self.target_groups)
         assert h == self.h_exp
 
     def test_variance(self):
-        var = scoring.SplitScoreMetrics["variance"](self.y, self.target_groups)
+        var = scoring.calc_split_score(
+            scoring.MetricNames.variance, self.y, self.target_groups
+        )
+        # var = scoring.SplitScoreMetrics["variance"](self.y, self.target_groups)
         assert var == self.var_exp
 
     def test_friedman_binary_classification(self):
-        var = scoring.SplitScoreMetrics["friedman_binary_classification"](
-            self.y, self.target_groups
+        var = scoring.calc_split_score(
+            scoring.MetricNames.friedman_binary_classification,
+            self.y,
+            self.target_groups,
         )
+        # var = scoring.SplitScoreMetrics["friedman_binary_classification"](
+        #     self.y, self.target_groups
+        # )
         assert var == self.var_exp
 
     @pytest.mark.parametrize(
@@ -455,8 +462,6 @@ class TestSplitScoreMetrics:
         y = None
 
         # line to test
-        score = scoring.calc_xgboost_split_score(
-            y, target_groups, g, h, growth_params
-        )
+        score = scoring.calc_xgboost_split_score(target_groups, g, h, growth_params)
 
         assert score == score_exp

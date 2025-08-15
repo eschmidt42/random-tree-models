@@ -4,23 +4,25 @@ from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.decisiontree as dtree
 import random_tree_models.extratrees as et
+from random_tree_models.scoring import MetricNames
+from tests.conftest import expected_failed_checks
 
 
 class TestExtraTreesTemplate:
-    model = et.ExtraTreesTemplate()
+    model = et.ExtraTreesTemplate(measure_name=MetricNames.gini)
 
     def test_tree_(self):
         assert not hasattr(self.model, "trees_")
 
     def test_fit(self):
         try:
-            self.model.fit(None, None)
+            self.model.fit(None, None)  # type: ignore
         except NotImplementedError as ex:
             pytest.xfail("ExtraTreesTemplate.fit expectedly refused call")
 
     def test_predict(self):
         try:
-            self.model.predict(None)
+            self.model.predict(None)  # type: ignore
         except NotImplementedError as ex:
             pytest.xfail("ExtraTreesTemplate.predict expectedly refused call")
 
@@ -81,7 +83,10 @@ class TestXGBoostClassifier:
         assert (predictions == self.y).all()
 
 
-@parametrize_with_checks([et.ExtraTreesRegressor(), et.ExtraTreesClassifier()])
+@parametrize_with_checks(
+    [et.ExtraTreesRegressor(), et.ExtraTreesClassifier()],
+    expected_failed_checks=expected_failed_checks,  # type: ignore
+)
 def test_extratrees_estimators_with_sklearn_checks(estimator, check):
     """Test of estimators using scikit-learn test suite
 

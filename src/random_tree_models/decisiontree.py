@@ -2,7 +2,6 @@ import typing as T
 import uuid
 
 import numpy as np
-import pandas as pd
 import sklearn.base as base
 from pydantic import (
     ConfigDict,
@@ -18,12 +17,13 @@ from rich.tree import Tree
 from sklearn.utils.multiclass import check_classification_targets, type_of_target
 from sklearn.utils.validation import (
     check_is_fitted,
-    validate_data,
+    validate_data,  # type: ignore
 )
 
 import random_tree_models.leafweights as leafweights
 import random_tree_models.scoring as scoring
 import random_tree_models.utils as utils
+from random_tree_models.scoring import MetricNames
 
 logger = utils.logger
 
@@ -161,7 +161,7 @@ def get_column(
     X: np.ndarray,
     column_params: utils.ColumnSelectionParameters,
     rng: np.random.RandomState,
-) -> T.List[int]:
+) -> list[int]:
     # select column order to split on
     method = column_params.method
     n_columns_to_try = column_params.n_trials
@@ -172,11 +172,13 @@ def get_column(
     elif method == utils.ColumnSelectionMethod.random:
         columns = np.array(columns)
         rng.shuffle(columns)
+        columns = columns.tolist()
     elif method == utils.ColumnSelectionMethod.largest_delta:
         deltas = X.max(axis=0) - X.min(axis=0)
         weights = deltas / deltas.sum()
         columns = np.array(columns)
         columns = rng.choice(columns, p=weights, size=len(columns), replace=False)
+        columns = columns.tolist()
     else:
         raise NotImplementedError(
             f"Unknown column selection method: {column_params.method}"
@@ -184,7 +186,7 @@ def get_column(
     if n_columns_to_try is not None:
         columns = columns[:n_columns_to_try]
 
-    return list(columns)
+    return columns
 
 
 def find_best_split(
@@ -219,7 +221,8 @@ def find_best_split(
         ) in get_thresholds_and_target_groups(
             feature_values, growth_params.threshold_params, rng
         ):
-            split_score = scoring.SplitScoreMetrics[measure_name](
+            split_score = scoring.calc_split_score(
+                scoring.MetricNames(measure_name),
                 y,
                 target_groups,
                 yhat=yhat,
@@ -244,21 +247,30 @@ def find_best_split(
 
 def check_if_split_sensible(
     best: BestSplit,
-    parent_node: Node,
+    parent_node: Node | None,
     growth_params: utils.TreeGrowthParameters,
 ) -> tuple[bool, float | None]:
     "Verifies if split is sensible, considering score gain and left/right group sizes"
-    if parent_node is None or parent_node.measure.value is None:
+    parent_is_none = parent_node is None
+    if parent_is_none:
+        return False, None
+
+    measure_is_none = parent_node.measure is None
+    if measure_is_none:
+        return False, None
+
+    value_is_none = parent_node.measure.value is None  # type: ignore
+    if value_is_none:
         return False, None
 
     # score gain
-    gain = best.score - parent_node.measure.value
+    gain = best.score - parent_node.measure.value  # type: ignore
     is_insufficient_gain = gain < growth_params.min_improvement
 
     # left/right group assignment
-    is_all_onesided = (
-        best.target_groups.all() or np.logical_not(best.target_groups).all()
-    )
+    all_on_one_side = bool(best.target_groups.all())
+    all_on_other_side = bool(np.logical_not(best.target_groups).all())
+    is_all_onesided = all_on_one_side or all_on_other_side
 
     is_not_sensible = is_all_onesided or is_insufficient_gain
 
@@ -267,15 +279,16 @@ def check_if_split_sensible(
 
 def calc_leaf_weight_and_split_score(
     y: np.ndarray,
-    measure_name: str,
+    measure_name: scoring.MetricNames,
     growth_params: utils.TreeGrowthParameters,
-    g: np.ndarray,
-    h: np.ndarray,
-) -> T.Tuple[float]:
+    g: np.ndarray | None = None,
+    h: np.ndarray | None = None,
+) -> tuple[float | None, float]:
     leaf_weight = leafweights.calc_leaf_weight(y, measure_name, growth_params, g=g, h=h)
 
     yhat = leaf_weight * np.ones_like(y)
-    score = scoring.SplitScoreMetrics[measure_name](
+    score = scoring.calc_split_score(
+        measure_name,
         y,
         np.ones_like(y, dtype=bool),
         yhat=yhat,
@@ -292,9 +305,9 @@ def select_arrays_for_child_node(
     best: BestSplit,
     X: np.ndarray,
     y: np.ndarray,
-    g: np.ndarray,
-    h: np.ndarray,
-) -> T.Tuple[np.ndarray]:
+    g: np.ndarray | None = None,
+    h: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None]:
     mask = best.target_groups == go_left
     _X = X[mask, :]
     _y = y[mask]
@@ -306,12 +319,12 @@ def select_arrays_for_child_node(
 def grow_tree(
     X: np.ndarray,
     y: np.ndarray,
-    measure_name: str,
-    parent_node: Node = None,
+    measure_name: MetricNames,
+    growth_params: utils.TreeGrowthParameters,
+    parent_node: Node | None = None,
     depth: int = 0,
-    growth_params: utils.TreeGrowthParameters = None,
-    g: np.ndarray = None,
-    h: np.ndarray = None,
+    g: np.ndarray | None = None,
+    h: np.ndarray | None = None,
     random_state: int = 42,
     **kwargs,
 ) -> Node:
@@ -352,6 +365,8 @@ def grow_tree(
     is_baselevel, reason = check_is_baselevel(
         y, depth, max_depth=growth_params.max_depth
     )
+    if parent_node is None:
+        scoring.reset_incrementing_score()
 
     # compute leaf weight (for prediction) and node score (for split gain check)
     leaf_weight, score = calc_leaf_weight_and_split_score(
@@ -361,7 +376,7 @@ def grow_tree(
     if is_baselevel:  # end of the line buddy
         return Node(
             prediction=leaf_weight,
-            measure=SplitScore(measure_name, score=score),
+            measure=SplitScore(measure_name, value=score),
             n_obs=n_obs,
             reason=reason,
             depth=depth,
@@ -383,7 +398,7 @@ def grow_tree(
         reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=} or all data points assigned to one side (is left {best.target_groups.mean()=:.2%})"
         leaf_node = Node(
             prediction=leaf_weight,
-            measure=SplitScore(measure_name, score=score),
+            measure=SplitScore(measure_name, value=score),
             n_obs=n_obs,
             reason=reason,
             depth=depth,
@@ -409,9 +424,9 @@ def grow_tree(
         _X,
         _y,
         measure_name=measure_name,
+        growth_params=growth_params,
         parent_node=new_node,
         depth=depth + 1,
-        growth_params=growth_params,
         g=_g,
         h=_h,
         random_state=random_state_left,
@@ -423,9 +438,9 @@ def grow_tree(
         _X,
         _y,
         measure_name=measure_name,
+        growth_params=growth_params,
         parent_node=new_node,
         depth=depth + 1,
-        growth_params=growth_params,
         g=_g,
         h=_h,
         random_state=random_state_right,
@@ -449,10 +464,20 @@ def find_leaf_node(node: Node, x: np.ndarray) -> Node:
             )
     else:
         go_left = x[node.array_column] < node.threshold
+
     if go_left:
-        node = find_leaf_node(node.left, x)
+        if node.left is not None:
+            node = find_leaf_node(node.left, x)
+        else:
+            raise ValueError(f"Oddly tried to access node.left even though it is None.")
     else:
-        node = find_leaf_node(node.right, x)
+        if node.right is not None:
+            node = find_leaf_node(node.right, x)
+        else:
+            raise ValueError(
+                f"Oddly tried to access node.right even though it is None."
+            )
+
     return node
 
 
@@ -463,12 +488,12 @@ def predict_with_tree(tree: Node, X: np.ndarray) -> np.ndarray:
             f"Passed `tree` needs to be an instantiation of Node, got {tree=}"
         )
     n_obs = len(X)
-    predictions = [None for _ in range(n_obs)]
+    predictions = []
 
     for i in range(n_obs):
         leaf_node = find_leaf_node(tree, X[i, :])
 
-        predictions[i] = leaf_node.prediction
+        predictions.append(leaf_node.prediction)
 
     predictions = np.array(predictions)
     return predictions
@@ -480,22 +505,36 @@ class DecisionTreeTemplate(base.BaseEstimator):
     Based on: https://scikit-learn.org/stable/developers/develop.html#rolling-your-own-estimator
     """
 
+    max_depth: int
+    measure_name: scoring.MetricNames
+    min_improvement: float
+    lam: float
+    frac_subsamples: float
+    frac_features: float
+    random_state: int
+    threshold_method: utils.ThresholdSelectionMethod
+    threshold_quantile: float
+    n_thresholds: int
+    column_method: utils.ColumnSelectionMethod
+    n_columns_to_try: int | None
+    ensure_all_finite: bool
+    tree_: Node
+
     def __init__(
         self,
-        measure_name: str = None,
+        measure_name: scoring.MetricNames,
         max_depth: int = 2,
         min_improvement: float = 0.0,
         lam: float = 0.0,
         frac_subsamples: float = 1.0,
         frac_features: float = 1.0,
-        threshold_method: utils.ThresholdSelectionMethod = "bruteforce",
+        threshold_method: utils.ThresholdSelectionMethod = utils.ThresholdSelectionMethod.bruteforce,
         threshold_quantile: float = 0.1,
         n_thresholds: int = 100,
-        column_method: utils.ColumnSelectionMethod = "ascending",
-        n_columns_to_try: int = None,
+        column_method: utils.ColumnSelectionMethod = utils.ColumnSelectionMethod.ascending,
+        n_columns_to_try: int | None = None,
         random_state: int = 42,
         ensure_all_finite: bool = True,
-        # **kwargs
     ) -> None:
         self.max_depth = max_depth
         self.measure_name = measure_name
@@ -567,12 +606,12 @@ class DecisionTreeTemplate(base.BaseEstimator):
 
     def fit(
         self,
-        X: T.Union[pd.DataFrame, np.ndarray],
-        y: T.Union[pd.Series, np.ndarray],
+        X: np.ndarray,
+        y: np.ndarray,
     ) -> "DecisionTreeTemplate":
         raise NotImplementedError()
 
-    def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
 
@@ -584,20 +623,19 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
 
     def __init__(
         self,
-        measure_name: str = "variance",
+        measure_name: MetricNames = MetricNames.variance,
         max_depth: int = 2,
         min_improvement: float = 0.0,
         lam: float = 0.0,
         frac_subsamples: float = 1.0,
         frac_features: float = 1.0,
-        threshold_method: utils.ThresholdSelectionMethod = "bruteforce",
+        threshold_method: utils.ThresholdSelectionMethod = utils.ThresholdSelectionMethod.bruteforce,
         threshold_quantile: float = 0.1,
         n_thresholds: int = 100,
-        column_method: utils.ColumnSelectionMethod = "ascending",
-        n_columns_to_try: int = None,
+        column_method: utils.ColumnSelectionMethod = utils.ColumnSelectionMethod.ascending,
+        n_columns_to_try: int | None = None,
         random_state: int = 42,
         ensure_all_finite: bool = True,
-        # **kwargs,
     ) -> None:
         super().__init__(
             measure_name=measure_name,
@@ -617,14 +655,13 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
 
     def fit(
         self,
-        X: T.Union[pd.DataFrame, np.ndarray],
-        y: T.Union[pd.Series, np.ndarray],
+        X: np.ndarray,
+        y: np.ndarray,
         **kwargs,
     ) -> "DecisionTreeRegressor":
         self._organize_growth_parameters()
-        # X, y = check_X_y(X, y, force_all_finite=self.ensure_all_finite)
-        X, y = validate_data(self, X, y)
-        # self.n_features_in_ = X.shape[1]
+
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
 
         _X, _y, self.ix_features_ = self._select_samples_and_features(X, y)
 
@@ -639,13 +676,10 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
 
         return self
 
-    def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("tree_", "growth_params_"))
 
-        X = validate_data(self, X, reset=False)
-        # X = check_array(X, force_all_finite=self.ensure_all_finite)
-        if X.shape[1] != self.n_features_in_:
-            raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         _X = self._select_features(X, self.ix_features_)
 
@@ -662,17 +696,17 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
 
     def __init__(
         self,
-        measure_name: str = "gini",
+        measure_name: MetricNames = MetricNames.gini,
         max_depth: int = 2,
         min_improvement: float = 0.0,
         lam: float = 0.0,
         frac_subsamples: float = 1.0,
         frac_features: float = 1.0,
-        threshold_method: utils.ThresholdSelectionMethod = "bruteforce",
+        threshold_method: utils.ThresholdSelectionMethod = utils.ThresholdSelectionMethod.bruteforce,
         threshold_quantile: float = 0.1,
         n_thresholds: int = 100,
-        column_method: utils.ColumnSelectionMethod = "ascending",
-        n_columns_to_try: int = None,
+        column_method: utils.ColumnSelectionMethod = utils.ColumnSelectionMethod.ascending,
+        n_columns_to_try: int | None = None,
         random_state: int = 42,
         ensure_all_finite: bool = True,
     ) -> None:
@@ -701,20 +735,20 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
 
     def __sklearn_tags__(self):
         # https://scikit-learn.org/stable/developers/develop.html
-        tags = super().__sklearn_tags__()
+        tags = super().__sklearn_tags__()  # type: ignore
         tags.classifier_tags.multi_class = False
         return tags
 
     def fit(
         self,
-        X: T.Union[pd.DataFrame, np.ndarray],
-        y: T.Union[pd.Series, np.ndarray],
+        X: np.ndarray,
+        y: np.ndarray,
     ) -> "DecisionTreeClassifier":
-        X, y = validate_data(self, X, y)
-        # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
+
         check_classification_targets(y)
 
-        y_type = type_of_target(y, input_name="y", raise_unknown=True)
+        y_type = type_of_target(y, input_name="y", raise_unknown=True)  # type: ignore
         if y_type != "binary":
             raise ValueError(
                 "Only binary classification is supported. The type of the target "
@@ -726,7 +760,6 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
 
         self._organize_growth_parameters()
 
-        # self.n_features_in_ = X.shape[1]
         self.classes_, y = np.unique(y, return_inverse=True)
 
         _X, _y, self.ix_features_ = self._select_samples_and_features(X, y)
@@ -741,12 +774,9 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
 
         return self
 
-    def predict_proba(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("tree_", "classes_", "growth_params_"))
-        X = validate_data(self, X, reset=False)
-        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
-        if X.shape[1] != self.n_features_in_:
-            raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         _X = self._select_features(X, self.ix_features_)
 
@@ -754,7 +784,7 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
         proba = np.array([1 - proba, proba]).T
         return proba
 
-    def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         proba = self.predict_proba(X)
         ix = np.argmax(proba, axis=1)
         y = self.classes_[ix]
@@ -763,7 +793,10 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
 
 
 def walk_tree(
-    decision_tree: Node, tree: Tree, parent: Node = None, is_left: bool = None
+    decision_tree: Node,
+    tree: Tree,
+    parent: Node | None = None,
+    is_left: bool | None = None,
 ):
     arrow = (
         ""

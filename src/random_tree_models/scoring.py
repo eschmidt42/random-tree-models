@@ -1,4 +1,4 @@
-from enum import Enum, member
+from enum import StrEnum, auto
 
 import numpy as np
 
@@ -6,7 +6,7 @@ import random_tree_models.utils as utils
 from random_tree_models import rs_entropy, rs_gini_impurity
 
 
-def check_y_and_target_groups(y: np.ndarray, target_groups: np.ndarray = None):
+def check_y_and_target_groups(y: np.ndarray, target_groups: np.ndarray | None = None):
     n = len(y)
     if n == 0:
         raise ValueError(f"{n=}, expected at least one target value")
@@ -15,7 +15,7 @@ def check_y_and_target_groups(y: np.ndarray, target_groups: np.ndarray = None):
         raise ValueError(f"{y.shape=} != {target_groups.shape=}")
 
 
-def calc_variance(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
+def calc_variance(y: np.ndarray, target_groups: np.ndarray) -> float:
     """Calculates the variance of a split"""
 
     check_y_and_target_groups(y, target_groups=target_groups)
@@ -23,7 +23,7 @@ def calc_variance(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
     n = len(y)
 
     if len(np.unique(target_groups)) == 1:
-        return -np.var(y)
+        return -float(np.var(y))
 
     w_left = target_groups.sum() / n
     w_right = 1.0 - w_left
@@ -57,7 +57,7 @@ def entropy(y: np.ndarray) -> float:
     return h
 
 
-def calc_entropy(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
+def calc_entropy(y: np.ndarray, target_groups: np.ndarray) -> float:
     """Calculates the entropy of a split"""
 
     check_y_and_target_groups(y, target_groups=target_groups)
@@ -72,7 +72,7 @@ def calc_entropy(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
     return h
 
 
-def calc_entropy_rs(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
+def calc_entropy_rs(y: np.ndarray, target_groups: np.ndarray) -> float:
     """Calculates the entropy of a split"""
 
     check_y_and_target_groups(y, target_groups=target_groups)
@@ -80,8 +80,11 @@ def calc_entropy_rs(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float
     w_left = target_groups.sum() / len(target_groups)
     w_right = 1.0 - w_left
 
-    h_left = rs_entropy(y[target_groups]) if w_left > 0 else 0
-    h_right = rs_entropy(y[~target_groups]) if w_right > 0 else 0
+    y_left = y[target_groups].tolist()
+    h_left = rs_entropy(y_left) if w_left > 0 else 0
+
+    y_right = y[~target_groups].tolist()
+    h_right = rs_entropy(y_right) if w_right > 0 else 0
 
     h = w_left * h_left + w_right * h_right
     return h
@@ -110,7 +113,7 @@ def gini_impurity(y: np.ndarray) -> float:
     return -g
 
 
-def calc_gini_impurity(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
+def calc_gini_impurity(y: np.ndarray, target_groups: np.ndarray) -> float:
     """Calculates the gini impurity of a split
 
     Based on: https://scikit-learn.org/stable/modules/tree.html#classification-criteria
@@ -128,7 +131,7 @@ def calc_gini_impurity(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> fl
     return g
 
 
-def calc_gini_impurity_rs(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
+def calc_gini_impurity_rs(y: np.ndarray, target_groups: np.ndarray) -> float:
     """Calculates the gini impurity of a split
 
     Based on: https://scikit-learn.org/stable/modules/tree.html#classification-criteria
@@ -139,8 +142,11 @@ def calc_gini_impurity_rs(y: np.ndarray, target_groups: np.ndarray, **kwargs) ->
     w_left = target_groups.sum() / len(target_groups)
     w_right = 1.0 - w_left
 
-    g_left = rs_gini_impurity(y[target_groups]) if w_left > 0 else 0
-    g_right = rs_gini_impurity(y[~target_groups]) if w_right > 0 else 0
+    y_left = y[target_groups].tolist()
+    g_left = rs_gini_impurity(y_left) if w_left > 0 else 0
+
+    y_right = y[~target_groups].tolist()
+    g_right = rs_gini_impurity(y_right) if w_right > 0 else 0
 
     g = w_left * g_left + w_right * g_right
     return g
@@ -165,12 +171,10 @@ def xgboost_split_score(
 
 
 def calc_xgboost_split_score(
-    y: np.ndarray,
     target_groups: np.ndarray,
     g: np.ndarray,
     h: np.ndarray,
     growth_params: utils.TreeGrowthParameters,
-    **kwargs,
 ) -> float:
     """Calculates the xgboost general version score of a split with loss specifics in g and h.
 
@@ -198,37 +202,75 @@ def calc_xgboost_split_score(
     return score
 
 
-class IncrementingScore:
-    score = 0
-
-    def __call__(self, *args, **kwargs) -> float:
-        """Calculates the random cut score of a split"""
-        self.score += 1
-        return self.score
+INC_SCORE = 0
 
 
-class SplitScoreMetrics(Enum):
-    # https://stackoverflow.com/questions/40338652/how-to-define-enum-values-that-are-functions
-    variance = member(calc_variance)
-    entropy = member(calc_entropy)
-    entropy_rs = member(calc_entropy_rs)
-    gini = member(calc_gini_impurity)
-    gini_rs = member(calc_gini_impurity_rs)
+def calc_incrementing_score() -> float:
+    global INC_SCORE
+    INC_SCORE += 1
+    return INC_SCORE
+
+
+def reset_incrementing_score():
+    global INC_SCORE
+    INC_SCORE = 0
+
+
+class MetricNames(StrEnum):
+    variance = auto()
+    entropy = auto()
+    entropy_rs = auto()
+    gini = auto()
+    gini_rs = auto()
     # variance for split score because Friedman et al. 2001 in Algorithm 1
     # step 4 minimize the squared error between actual and predicted dloss/dyhat
-    friedman_binary_classification = member(calc_variance)
-    xgboost = member(calc_xgboost_split_score)
-    incrementing = member(IncrementingScore())
+    friedman_binary_classification = auto()
+    xgboost = auto()
+    incrementing = auto()
 
-    def __call__(
-        self,
-        y: np.ndarray,
-        target_groups: np.ndarray,
-        yhat: np.ndarray | None = None,
-        g: np.ndarray | None = None,
-        h: np.ndarray | None = None,
-        growth_params: utils.TreeGrowthParameters | None = None,
-    ) -> float:
-        return self.value(
-            y, target_groups, yhat=yhat, g=g, h=h, growth_params=growth_params
-        )
+
+def calc_split_score(
+    metric: MetricNames,
+    y: np.ndarray,
+    target_groups: np.ndarray,
+    yhat: np.ndarray | None = None,
+    g: np.ndarray | None = None,
+    h: np.ndarray | None = None,
+    growth_params: utils.TreeGrowthParameters | None = None,
+) -> float:
+    match metric:
+        case MetricNames.variance:
+            return calc_variance(y, target_groups)
+        case MetricNames.entropy:
+            return calc_entropy(y, target_groups)
+        case MetricNames.entropy_rs:
+            return calc_entropy_rs(y, target_groups)
+        case MetricNames.gini:
+            return calc_gini_impurity(
+                y,
+                target_groups,
+            )
+        case MetricNames.gini_rs:
+            return calc_gini_impurity_rs(
+                y,
+                target_groups,
+            )
+        case MetricNames.friedman_binary_classification:
+            return calc_variance(
+                y,
+                target_groups,
+            )
+        case MetricNames.xgboost:
+            if g is None or h is None or growth_params is None:
+                raise ValueError(
+                    f"{g=}, {h=}, {growth_params=} cannot be None for {metric=}"
+                )
+            return calc_xgboost_split_score(
+                target_groups, g=g, h=h, growth_params=growth_params
+            )
+        case MetricNames.incrementing:
+            return calc_incrementing_score()
+        case _:
+            raise NotImplementedError(
+                f"calc_split_score is not implemented for {metric=}."
+            )

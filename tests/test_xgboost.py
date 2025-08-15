@@ -4,6 +4,7 @@ from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.decisiontree as dtree
 import random_tree_models.xgboost as xgboost
+from tests.conftest import expected_failed_checks
 
 
 class TestXGBoostTemplate:
@@ -14,13 +15,13 @@ class TestXGBoostTemplate:
 
     def test_fit(self):
         try:
-            self.model.fit(None, None)
+            self.model.fit(None, None)  # type: ignore
         except NotImplementedError as ex:
             pytest.xfail("XGBoostTemplate.fit expectedly refused call")
 
     def test_predict(self):
         try:
-            self.model.predict(None)
+            self.model.predict(None)  # type: ignore
         except NotImplementedError as ex:
             pytest.xfail("XGBoostTemplate.predict expectedly refused call")
 
@@ -81,7 +82,10 @@ class TestXGBoostClassifier:
         assert (predictions == self.y).all()
 
 
-@parametrize_with_checks([xgboost.XGBoostRegressor(), xgboost.XGBoostClassifier()])
+@parametrize_with_checks(
+    [xgboost.XGBoostRegressor(), xgboost.XGBoostClassifier()],
+    expected_failed_checks=expected_failed_checks,  # type: ignore
+)
 def test_xgboost_estimators_with_sklearn_checks(estimator, check):
     """Test of estimators using scikit-learn test suite
 

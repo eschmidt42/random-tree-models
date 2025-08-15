@@ -1,15 +1,15 @@
 import typing as T
 
 import numpy as np
-import pandas as pd
 from rich.progress import track
 from sklearn import base
-from sklearn.utils.validation import check_is_fitted, validate_data
+from sklearn.utils.validation import check_is_fitted, validate_data  # type: ignore
 
 import random_tree_models.decisiontree as dtree
+from random_tree_models.scoring import MetricNames
+from random_tree_models.utils import ColumnSelectionMethod, ThresholdSelectionMethod
 
 
-# TODO: add tests
 def predict_with_isolationtree(tree: dtree.Node, X: np.ndarray) -> np.ndarray:
     "Traverse a previously built tree to make one prediction per row in X"
     if not isinstance(tree, dtree.Node):
@@ -33,10 +33,14 @@ class IsolationTree(base.OutlierMixin, dtree.DecisionTreeTemplate):
     https://ieeexplore.ieee.org/abstract/document/4781136
     """
 
+    measure_name: MetricNames
+    ensure_all_finite: bool
+    max_depth: int
+
     def __init__(
         self,
+        measure_name: MetricNames = MetricNames.incrementing,
         ensure_all_finite: bool = True,
-        measure_name: str = "incrementing",
         max_depth: int = 10,
         **kwargs,
     ) -> None:
@@ -45,14 +49,12 @@ class IsolationTree(base.OutlierMixin, dtree.DecisionTreeTemplate):
 
     def fit(
         self,
-        X: T.Union[pd.DataFrame, np.ndarray],
+        X: np.ndarray,
         y=None,
         **kwargs,
     ) -> "IsolationTree":
         self._organize_growth_parameters()
-        X = validate_data(self, X)
-        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
-        # self.n_features_in_ = X.shape[1]
+        X = validate_data(self, X, ensure_all_finite=False)
 
         dummy_y = np.arange(X.shape[0], dtype=float)
 
@@ -69,13 +71,10 @@ class IsolationTree(base.OutlierMixin, dtree.DecisionTreeTemplate):
 
         return self
 
-    def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("tree_", "growth_params_"))
 
-        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
-        X = validate_data(self, X, reset=False)
-        # if X.shape[1] != self.n_features_in_:
-        #     raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         _X = self._select_features(X, self.ix_features_)
 
@@ -91,17 +90,29 @@ class IsolationForest(base.BaseEstimator, base.OutlierMixin):
     https://ieeexplore.ieee.org/abstract/document/4781136
     """
 
+    measure_name: MetricNames
+    n_trees: int
+    max_depth: int
+    ensure_all_finite: bool
+    frac_subsamples: float
+    frac_features: float
+    threshold_method: ThresholdSelectionMethod
+    n_thresholds: int
+    column_method: ColumnSelectionMethod
+    n_columns_to_try: int
+    random_state: int
+
     def __init__(
         self,
+        measure_name: MetricNames = MetricNames.incrementing,
         n_trees: int = 100,
-        measure_name: str = "incrementing",
         max_depth: int = 10,
         ensure_all_finite: bool = True,
         frac_subsamples: float = 2 / 3,
         frac_features: float = 1.0,
-        threshold_method: str = "random",
+        threshold_method: ThresholdSelectionMethod = ThresholdSelectionMethod.random,
         n_thresholds: int = 1,
-        column_method: str = "random",
+        column_method: ColumnSelectionMethod = ColumnSelectionMethod.random,
         n_columns_to_try: int = 1,
         random_state: int = 42,
     ) -> None:
@@ -119,10 +130,7 @@ class IsolationForest(base.BaseEstimator, base.OutlierMixin):
         self.random_state = random_state
 
     def fit(self, X: np.ndarray, y=None) -> "IsolationForest":
-        X = validate_data(self, X)
-        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
-
-        # self.n_features_in_ = X.shape[1]
+        X = validate_data(self, X, ensure_all_finite=False)
 
         self.trees_: T.List[IsolationTree] = []
         rng = np.random.RandomState(self.random_state)
@@ -147,10 +155,8 @@ class IsolationForest(base.BaseEstimator, base.OutlierMixin):
 
     def predict(self, X: np.ndarray, aggregation: str = "mean") -> np.ndarray:
         check_is_fitted(self, ("trees_", "n_features_in_"))
-        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
-        X = validate_data(self, X, reset=False)
-        # if X.shape[1] != self.n_features_in_:
-        #     raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
+
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         y = np.zeros((X.shape[0], self.n_trees), dtype=float)
 

@@ -23,18 +23,28 @@ from sklearn.utils.multiclass import (
 )
 from sklearn.utils.validation import (
     check_is_fitted,
-    validate_data,
+    validate_data,  # type: ignore
 )
 
 import random_tree_models.decisiontree as dtree
 import random_tree_models.gradientboostedtrees as gbt
+from random_tree_models.scoring import MetricNames
 
 
 class XGBoostTemplate(base.BaseEstimator):
+    measure_name: MetricNames
+    n_trees: int
+    max_depth: int
+    min_improvement: float
+    lam: float
+    ensure_all_finite: bool
+    use_hist: bool
+    n_bins: int
+
     def __init__(
         self,
+        measure_name: MetricNames = MetricNames.xgboost,
         n_trees: int = 3,
-        measure_name: str = "xgboost",
         max_depth: int = 2,
         min_improvement: float = 0.0,
         lam: float = 0.0,
@@ -54,12 +64,12 @@ class XGBoostTemplate(base.BaseEstimator):
 
     def fit(
         self,
-        X: T.Union[pd.DataFrame, np.ndarray],
-        y: T.Union[pd.Series, np.ndarray],
+        X: np.ndarray,
+        y: np.ndarray,
     ):
         raise NotImplementedError()
 
-    def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
 
@@ -110,7 +120,7 @@ def xgboost_histogrammify_with_h(
 # TODO: add test that compares the output with that of xgboost_histogrammify_with_h
 def xgboost_histogrammify_with_x_bin_edges(
     X: np.ndarray, all_x_bin_edges: T.List[np.ndarray]
-) -> T.Tuple[np.ndarray, T.List[np.ndarray]]:
+) -> np.ndarray:
     """Converts X into a histogram representation using XGBoost paper eq 8 and 9 using 2nd order gradient statistics as weights"""
     X_hist = np.zeros_like(X, dtype=int)
 
@@ -132,13 +142,13 @@ class XGBoostRegressor(base.RegressorMixin, XGBoostTemplate):
     """
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "XGBoostRegressor":
-        X, y = validate_data(self, X, y)
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
         # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
         # self.n_features_in_ = X.shape[1]
 
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
 
-        self.start_estimate_ = np.mean(y)
+        self.start_estimate_: float = float(np.mean(y))
 
         # initial differences to predict using negative squared error loss
         g, h = compute_derivatives_negative_least_squares(y, self.start_estimate_)
@@ -168,10 +178,8 @@ class XGBoostRegressor(base.RegressorMixin, XGBoostTemplate):
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("trees_", "n_features_in_", "start_estimate_"))
-        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
-        X = validate_data(self, X, reset=False)
-        if X.shape[1] != self.n_features_in_:
-            raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
+
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         # baseline estimate
         y = np.ones(X.shape[0]) * self.start_estimate_
@@ -240,16 +248,16 @@ class XGBoostClassifier(base.ClassifierMixin, XGBoostTemplate):
 
     def __sklearn_tags__(self):
         # https://scikit-learn.org/stable/developers/develop.html
-        tags = super().__sklearn_tags__()
+        tags = super().__sklearn_tags__()  # type: ignore
         tags.classifier_tags.multi_class = False
         return tags
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "XGBoostClassifier":
-        X, y = validate_data(self, X, y)
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
 
         check_classification_targets(y)
 
-        y_type = type_of_target(y, input_name="y", raise_unknown=True)
+        y_type = type_of_target(y, input_name="y", raise_unknown=True)  # type: ignore
         if y_type != "binary":
             raise ValueError(
                 "Only binary classification is supported. The type of the target "
@@ -298,12 +306,9 @@ class XGBoostClassifier(base.ClassifierMixin, XGBoostTemplate):
 
         return self
 
-    def predict_proba(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("trees_", "classes_", "gammas_", "n_features_in_"))
-        X = validate_data(self, X, reset=False)
-        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
-        if X.shape[1] != self.n_features_in_:
-            raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         g = np.ones(X.shape[0]) * self.start_estimate_
 

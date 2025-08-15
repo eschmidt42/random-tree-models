@@ -1,9 +1,7 @@
 import numpy as np
-import pytest
-from sklearn.utils.estimator_checks import parametrize_with_checks
 
-import random_tree_models.decisiontree as dtree
 import random_tree_models.isolationforest as iforest
+from random_tree_models.utils import ThresholdSelectionMethod
 
 rng = np.random.RandomState(42)
 
@@ -39,12 +37,16 @@ class TestIsolationForest:
     X_outlier = rng.normal(size=(1000, 2), scale=0.1, loc=10)
 
     def test_fit(self):
-        model = iforest.IsolationForest(threshold_method="uniform")
+        model = iforest.IsolationForest(
+            threshold_method=ThresholdSelectionMethod.uniform
+        )
         model.fit(self.X_inlier)
         assert hasattr(model, "trees_")
 
     def test_predict(self):
-        model = iforest.IsolationForest(threshold_method="uniform")
+        model = iforest.IsolationForest(
+            threshold_method=ThresholdSelectionMethod.uniform
+        )
         model.fit(self.X_inlier)
 
         predictions_inlier = model.predict(self.X_inlier)
