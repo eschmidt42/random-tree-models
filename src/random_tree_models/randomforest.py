@@ -85,7 +85,7 @@ class RandomForestRegressor(base.RegressorMixin, RandomForestTemplate):
         )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "RandomForestRegressor":
-        X, y = validate_data(self, X, y)
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
 
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
         rng = np.random.RandomState(self.random_state)
@@ -107,7 +107,7 @@ class RandomForestRegressor(base.RegressorMixin, RandomForestTemplate):
     def predict(self, X: np.ndarray, aggregation: str = "mean") -> np.ndarray:
         check_is_fitted(self, ("trees_", "n_features_in_"))
 
-        X = validate_data(self, X, reset=False)
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         y = np.zeros((X.shape[0], self.n_trees), dtype=float)
 
@@ -167,8 +167,7 @@ class RandomForestClassifier(base.ClassifierMixin, RandomForestTemplate):
         return tags
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "RandomForestClassifier":
-        # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
-        X, y = validate_data(self, X, y)
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
         check_classification_targets(y)
 
         y_type = type_of_target(y, input_name="y", raise_unknown=True)  # type: ignore
@@ -203,7 +202,7 @@ class RandomForestClassifier(base.ClassifierMixin, RandomForestTemplate):
     def predict_proba(self, X: np.ndarray, aggregation: str = "mean") -> np.ndarray:
         check_is_fitted(self, ("trees_", "classes_", "n_features_in_"))
 
-        X = validate_data(self, X, reset=False)
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         proba = np.zeros((X.shape[0], self.n_trees, len(self.classes_)), dtype=float)
 

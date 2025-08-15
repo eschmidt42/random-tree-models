@@ -101,9 +101,7 @@ class ExtraTreesRegressor(base.RegressorMixin, ExtraTreesTemplate):
         )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "ExtraTreesRegressor":
-        X, y = validate_data(self, X, y)
-        # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
-        # self.n_features_in_ = X.shape[1]
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
 
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
         rng = np.random.RandomState(self.random_state)
@@ -128,7 +126,7 @@ class ExtraTreesRegressor(base.RegressorMixin, ExtraTreesTemplate):
 
     def predict(self, X: np.ndarray, aggregation: str = "mean") -> np.ndarray:
         check_is_fitted(self, ("trees_", "n_features_in_"))
-        X = validate_data(self, X, reset=False)
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         y = np.zeros((X.shape[0], self.n_trees), dtype=float)
 
@@ -194,7 +192,7 @@ class ExtraTreesClassifier(base.ClassifierMixin, ExtraTreesTemplate):
         return tags
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "ExtraTreesClassifier":
-        X, y = validate_data(self, X, y)
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
 
         check_classification_targets(y)
         if len(np.unique(y)) == 1:
@@ -224,7 +222,7 @@ class ExtraTreesClassifier(base.ClassifierMixin, ExtraTreesTemplate):
 
     def predict_proba(self, X: np.ndarray, aggregation: str = "mean") -> np.ndarray:
         check_is_fitted(self, ("trees_", "classes_", "n_features_in_"))
-        X = validate_data(self, X, reset=False)
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         proba = np.zeros((X.shape[0], self.n_trees, len(self.classes_)), dtype=float)
 

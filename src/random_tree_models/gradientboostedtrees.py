@@ -91,7 +91,7 @@ class GradientBoostedTreesRegressor(
         self.factor = factor
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "GradientBoostedTreesRegressor":
-        X, y = validate_data(self, X, y)
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
 
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
 
@@ -119,7 +119,7 @@ class GradientBoostedTreesRegressor(
     def predict(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("trees_", "n_features_in_", "start_estimate_"))
 
-        X = validate_data(self, X, reset=False)
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         # baseline estimate
         y = np.ones(X.shape[0]) * self.start_estimate_
@@ -233,7 +233,7 @@ class GradientBoostedTreesClassifier(
         return tags
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "GradientBoostedTreesClassifier":
-        X, y = validate_data(self, X, y)
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
 
         check_classification_targets(y)
 
@@ -279,7 +279,7 @@ class GradientBoostedTreesClassifier(
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("trees_", "classes_", "gammas_", "n_features_in_"))
-        X = validate_data(self, X, reset=False)
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         g = np.ones(X.shape[0]) * self.start_estimate_
 

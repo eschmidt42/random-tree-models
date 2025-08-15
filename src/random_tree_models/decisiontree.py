@@ -636,7 +636,6 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
         n_columns_to_try: int | None = None,
         random_state: int = 42,
         ensure_all_finite: bool = True,
-        # **kwargs,
     ) -> None:
         super().__init__(
             measure_name=measure_name,
@@ -661,9 +660,8 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
         **kwargs,
     ) -> "DecisionTreeRegressor":
         self._organize_growth_parameters()
-        # X, y = check_X_y(X, y, force_all_finite=self.ensure_all_finite)
-        X, y = validate_data(self, X, y)
-        # self.n_features_in_ = X.shape[1]
+
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
 
         _X, _y, self.ix_features_ = self._select_samples_and_features(X, y)
 
@@ -681,7 +679,7 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
     def predict(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("tree_", "growth_params_"))
 
-        X = validate_data(self, X, reset=False)
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         _X = self._select_features(X, self.ix_features_)
 
@@ -746,7 +744,7 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
         X: np.ndarray,
         y: np.ndarray,
     ) -> "DecisionTreeClassifier":
-        X, y = validate_data(self, X, y)
+        X, y = validate_data(self, X, y, ensure_all_finite=False)
 
         check_classification_targets(y)
 
@@ -778,7 +776,7 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("tree_", "classes_", "growth_params_"))
-        X = validate_data(self, X, reset=False)
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         _X = self._select_features(X, self.ix_features_)
 

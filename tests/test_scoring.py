@@ -95,7 +95,7 @@ def test_entropy(y: np.ndarray):
 def test_entropy_rs(y: np.ndarray):
     try:
         # line to test
-        h = rs_entropy(y)
+        h = rs_entropy(y.tolist())
     except ValueError as ex:
         if len(y) == 0:
             pytest.xfail("entropy properly failed because of empty y")
@@ -199,7 +199,7 @@ def test_gini_impurity(y: np.ndarray):
 def test_gini_impurity_rs(y: np.ndarray):
     try:
         # line to test
-        g = rs_gini_impurity(y)
+        g = rs_gini_impurity(y.tolist())
     except ValueError as ex:
         if len(y) == 0:
             pytest.xfail("gini_impurity properly failed because of empty y")
@@ -221,7 +221,7 @@ def test_gini_impurity_rs(y: np.ndarray):
 )
 def test_gini_impurity_py_vs_rs(y: np.ndarray):
     g_py = scoring.gini_impurity(y)
-    g_rs = rs_gini_impurity(y)
+    g_rs = rs_gini_impurity(y.tolist())
 
     assert np.isclose(g_py, g_rs)
 
@@ -352,7 +352,7 @@ def test_calc_xgboost_split_score(
     y = None
     try:
         # line to test
-        score = scoring.calc_xgboost_split_score(y, target_groups, g, h, growth_params)
+        score = scoring.calc_xgboost_split_score(target_groups, g, h, growth_params)
     except ValueError as ex:
         if score_exp is None:
             pytest.xfail("Properly raised error calculating the xgboost score")
@@ -462,6 +462,6 @@ class TestSplitScoreMetrics:
         y = None
 
         # line to test
-        score = scoring.calc_xgboost_split_score(y, target_groups, g, h, growth_params)
+        score = scoring.calc_xgboost_split_score(target_groups, g, h, growth_params)
 
         assert score == score_exp

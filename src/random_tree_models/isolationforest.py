@@ -54,7 +54,7 @@ class IsolationTree(base.OutlierMixin, dtree.DecisionTreeTemplate):
         **kwargs,
     ) -> "IsolationTree":
         self._organize_growth_parameters()
-        X = validate_data(self, X)
+        X = validate_data(self, X, ensure_all_finite=False)
 
         dummy_y = np.arange(X.shape[0], dtype=float)
 
@@ -74,7 +74,7 @@ class IsolationTree(base.OutlierMixin, dtree.DecisionTreeTemplate):
     def predict(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("tree_", "growth_params_"))
 
-        X = validate_data(self, X, reset=False)
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         _X = self._select_features(X, self.ix_features_)
 
@@ -130,7 +130,7 @@ class IsolationForest(base.BaseEstimator, base.OutlierMixin):
         self.random_state = random_state
 
     def fit(self, X: np.ndarray, y=None) -> "IsolationForest":
-        X = validate_data(self, X)
+        X = validate_data(self, X, ensure_all_finite=False)
 
         self.trees_: T.List[IsolationTree] = []
         rng = np.random.RandomState(self.random_state)
@@ -156,7 +156,7 @@ class IsolationForest(base.BaseEstimator, base.OutlierMixin):
     def predict(self, X: np.ndarray, aggregation: str = "mean") -> np.ndarray:
         check_is_fitted(self, ("trees_", "n_features_in_"))
 
-        X = validate_data(self, X, reset=False)
+        X = validate_data(self, X, reset=False, ensure_all_finite=False)
 
         y = np.zeros((X.shape[0], self.n_trees), dtype=float)
 
