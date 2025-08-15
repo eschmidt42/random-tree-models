@@ -12,6 +12,7 @@ import random_tree_models.utils as utils
 from random_tree_models import scoring
 from random_tree_models.scoring import MetricNames
 from random_tree_models.utils import ThresholdSelectionMethod
+from tests.conftest import expected_failed_checks
 
 # first value in each tuple is the value to test and the second is the flag indicating if this should work
 BOOL_OPTIONS_NONE_OKAY = [(False, True), (True, True), ("blub", False)]
@@ -385,25 +386,29 @@ class Test_get_thresholds_and_target_groups:
     def test_with_missing_case(self):
         feature_values = np.linspace(-1, 1, 10)
         feature_values[5] = np.nan
-        threshold_params = utils.ThresholdSelectionParameters(method="bruteforce")
+        threshold_params = utils.ThresholdSelectionParameters(
+            method=ThresholdSelectionMethod.bruteforce
+        )
         rng = np.random.RandomState(42)
 
+        thresholds_and_target_groups = dtree.get_thresholds_and_target_groups(
+            feature_values, threshold_params, rng=rng
+        )
+
         # line to test
-        for i, (
+        c = 0
+        for (
             threshold,
             target_groups,
             default_direction_is_left,
-        ) in enumerate(
-            dtree.get_thresholds_and_target_groups(
-                feature_values, threshold_params, rng=rng
-            )
-        ):
+        ) in thresholds_and_target_groups:
             assert isinstance(target_groups, np.ndarray)
             assert threshold in feature_values[1:]
             assert target_groups.dtype == bool
             assert default_direction_is_left in [True, False]
+            c += 1
 
-        assert i == 2 * (len(feature_values[1:]) - 1) - 1
+        assert c == 2 * (len(feature_values[1:]) - 1)
 
 
 class Test_get_column:
@@ -418,7 +423,7 @@ class Test_get_column:
         n_columns = 10
         n_trials = None
         column_params = utils.ColumnSelectionParameters(
-            method="ascending", n_trials=n_trials
+            method=utils.ColumnSelectionMethod.ascending, n_trials=n_trials
         )
         X = np.random.normal(size=(100, n_columns))
         rng = np.random.RandomState(42)
@@ -432,7 +437,7 @@ class Test_get_column:
         n_columns = 10
         n_trials = 5
         column_params = utils.ColumnSelectionParameters(
-            method="ascending", n_trials=n_trials
+            method=utils.ColumnSelectionMethod.ascending, n_trials=n_trials
         )
         X = np.random.normal(size=(100, n_columns))
         rng = np.random.RandomState(42)
@@ -446,7 +451,7 @@ class Test_get_column:
         n_columns = 10
         n_trials = None
         column_params = utils.ColumnSelectionParameters(
-            method="random", n_trials=n_trials
+            method=utils.ColumnSelectionMethod.random, n_trials=n_trials
         )
         X = np.random.normal(size=(100, n_columns))
         rng = np.random.RandomState(42)
@@ -461,7 +466,7 @@ class Test_get_column:
         n_columns = 10
         n_trials = None
         column_params = utils.ColumnSelectionParameters(
-            method="random", n_trials=n_trials
+            method=utils.ColumnSelectionMethod.random, n_trials=n_trials
         )
         X = np.random.normal(size=(100, n_columns))
 
@@ -477,7 +482,7 @@ class Test_get_column:
         n_columns = 5
         n_trials = None
         column_params = utils.ColumnSelectionParameters(
-            method="largest_delta", n_trials=n_trials
+            method=utils.ColumnSelectionMethod.largest_delta, n_trials=n_trials
         )
         rng = np.random.RandomState(42)
         X = np.array([[0, 0.001], [0, 0.01], [0, 0.1], [0, 1.0], [0, 10.0]]).T
@@ -854,7 +859,7 @@ def test_check_if_split_sensible(
     )
 
     assert is_not_sensible_split == is_no_sensible_split_exp
-    if parent_node is None or parent_node.measure.value is None:
+    if parent_node is None or parent_node.measure.value is None:  # type: ignore
         assert gain is None
 
 
@@ -912,6 +917,8 @@ def test_select_arrays_for_child_node(go_left: bool):
         g=g,
         h=h,
     )
+    assert _g is not None
+    assert _h is not None
     if go_left:
         assert np.allclose(_X, X[:2])
         assert np.allclose(_y, y[:2])
@@ -928,7 +935,7 @@ class Test_grow_tree:
     X = np.array([[1], [2], [3]])
     y = np.array([True, True, False])
     target_groups = np.array([True, True, False])
-    measure_name = "gini"
+    measure_name = MetricNames.gini
     depth_dummy = 0
 
     def test_baselevel(self):
@@ -1066,12 +1073,14 @@ class Test_grow_tree:
             assert tree.is_leaf == False
 
             # left leaf
+            assert tree.left is not None
             assert tree.left.reason == leaf_reason
             assert tree.left.prediction == 1.0
             assert tree.left.n_obs == 2
             assert tree.left.is_leaf == True
 
             # right leaf
+            assert tree.right is not None
             assert tree.right.reason == leaf_reason
             assert tree.right.prediction == 0.0
             assert tree.right.n_obs == 1
@@ -1158,19 +1167,19 @@ class TestDecisionTreeTemplate:
 
     def test_fit(self):
         try:
-            self.model.fit(None, None)
+            self.model.fit(None, None)  # type: ignore
         except NotImplementedError as ex:
             pytest.xfail("DecisionTreeTemplate.fit expectedly refused call")
 
     def test_predict(self):
         try:
-            self.model.predict(None)
+            self.model.predict(None)  # type: ignore
         except NotImplementedError as ex:
             pytest.xfail("DecisionTreeTemplate.predict expectedly refused call")
 
     def test_select_samples_and_features_no_sampling(self):
         self.model.frac_features = 1.0
-        self.model.frac_samples = 1.0
+        self.model.frac_subsamples = 1.0
         self.model._organize_growth_parameters()
 
         # line to test
@@ -1182,7 +1191,7 @@ class TestDecisionTreeTemplate:
 
     def test_select_samples_and_features_with_column_sampling(self):
         self.model.frac_features = 0.5
-        self.model.frac_samples = 1.0
+        self.model.frac_subsamples = 1.0
         self.model._organize_growth_parameters()
 
         # line to test
@@ -1196,7 +1205,7 @@ class TestDecisionTreeTemplate:
 
     def test_select_samples_and_features_with_row_sampling(self):
         self.model.frac_features = 1.0
-        self.model.frac_samples = 0.5
+        self.model.frac_subsamples = 0.5
         self.model._organize_growth_parameters()
 
         # line to test
@@ -1208,7 +1217,7 @@ class TestDecisionTreeTemplate:
 
     def test_select_samples_and_features_with_column_and_row_sampling(self):
         self.model.frac_features = 0.5
-        self.model.frac_samples = 0.5
+        self.model.frac_subsamples = 0.5
         self.model._organize_growth_parameters()
 
         # line to test
@@ -1223,7 +1232,7 @@ class TestDecisionTreeTemplate:
 
     def test_select_samples_and_features_sampling_reproducibility(self):
         self.model.frac_features = 0.5
-        self.model.frac_samples = 0.5
+        self.model.frac_subsamples = 0.5
         self.model._organize_growth_parameters()
 
         # line to test
@@ -1296,13 +1305,6 @@ class TestDecisionTreeClassifier:
         model.fit(self.X, self.y)
         predictions = model.predict(self.X)
         assert (predictions == self.y).all()
-
-
-def expected_failed_checks(check) -> dict[str, str]:
-    return {
-        "check_do_not_raise_errors_in_init_or_set_params": "measure_name and similar parameters are Enums, this seems to not be expected by sklearn.",
-        "check_parameters_default_constructible": "measure_name and similar parameters are Enums, this seems to not be expected by sklearn.",
-    }
 
 
 @parametrize_with_checks(
