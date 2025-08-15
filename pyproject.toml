@@ -39,4 +39,5 @@ dev = [
     "pre-commit>=3.3.2",
     "snakeviz>=2.2.0",
     "pip-audit>=2.9.0",
+    "pytest-cov>=6.2.1",
 ]
