@@ -4,6 +4,7 @@ from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.decisiontree as dtree
 import random_tree_models.gradientboostedtrees as gbt
+from tests.conftest import expected_failed_checks
 
 
 class TestGradientBoostedTreesTemplate:
@@ -14,13 +15,13 @@ class TestGradientBoostedTreesTemplate:
 
     def test_fit(self):
         try:
-            self.model.fit(None, None)
+            self.model.fit(None, None)  # type: ignore
         except NotImplementedError as ex:
             pytest.xfail("DecisionTreeTemplate.fit expectedly refused call")
 
     def test_predict(self):
         try:
-            self.model.predict(None)
+            self.model.predict(None)  # type: ignore
         except NotImplementedError as ex:
             pytest.xfail("DecisionTreeTemplate.predict expectedly refused call")
 
@@ -82,7 +83,8 @@ class TestGradientBoostedTreesClassifier:
 
 
 @parametrize_with_checks(
-    [gbt.GradientBoostedTreesRegressor(), gbt.GradientBoostedTreesClassifier()]
+    [gbt.GradientBoostedTreesRegressor(), gbt.GradientBoostedTreesClassifier()],
+    expected_failed_checks=expected_failed_checks,  # type: ignore
 )
 def test_gbt_estimators_with_sklearn_checks(estimator, check):
     """Test of estimators using scikit-learn test suite

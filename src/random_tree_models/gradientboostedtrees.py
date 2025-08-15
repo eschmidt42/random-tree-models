@@ -2,7 +2,6 @@ import math
 import typing as T
 
 import numpy as np
-import pandas as pd
 import sklearn.base as base
 from rich.progress import track
 from sklearn.utils.multiclass import (
@@ -11,17 +10,24 @@ from sklearn.utils.multiclass import (
 )
 from sklearn.utils.validation import (
     check_is_fitted,
-    validate_data,
+    validate_data,  # type: ignore
 )
 
 import random_tree_models.decisiontree as dtree
+from random_tree_models.scoring import MetricNames
 
 
 class GradientBoostedTreesTemplate(base.BaseEstimator):
+    measure_name: MetricNames
+    n_trees: int
+    max_depth: int
+    min_improvement: float
+    ensure_all_finite: bool
+
     def __init__(
         self,
+        measure_name: MetricNames = MetricNames.variance,
         n_trees: int = 3,
-        measure_name: str = None,
         max_depth: int = 2,
         min_improvement: float = 0.0,
         ensure_all_finite: bool = True,
@@ -35,12 +41,12 @@ class GradientBoostedTreesTemplate(base.BaseEstimator):
 
     def fit(
         self,
-        X: T.Union[pd.DataFrame, np.ndarray],
-        y: T.Union[pd.Series, np.ndarray],
+        X: np.ndarray,
+        y: np.ndarray,
     ):
         raise NotImplementedError()
 
-    def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
 
@@ -68,8 +74,8 @@ class GradientBoostedTreesRegressor(
 
     def __init__(
         self,
+        measure_name: MetricNames = MetricNames.variance,
         factor: float = 1.0,
-        measure_name: str = "variance",
         n_trees: int = 3,
         max_depth: int = 2,
         min_improvement: float = 0.0,
@@ -85,9 +91,7 @@ class GradientBoostedTreesRegressor(
         self.factor = factor
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "GradientBoostedTreesRegressor":
-        # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
         X, y = validate_data(self, X, y)
-        # self.n_features_in_ = X.shape[1]
 
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
 
@@ -114,10 +118,8 @@ class GradientBoostedTreesRegressor(
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("trees_", "n_features_in_", "start_estimate_"))
-        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
+
         X = validate_data(self, X, reset=False)
-        if X.shape[1] != self.n_features_in_:
-            raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
         # baseline estimate
         y = np.ones(X.shape[0]) * self.start_estimate_
@@ -199,7 +201,7 @@ class GradientBoostedTreesClassifier(
 
     def __init__(
         self,
-        measure_name: str = "friedman_binary_classification",
+        measure_name: MetricNames = MetricNames.friedman_binary_classification,
         n_trees: int = 3,
         max_depth: int = 2,
         min_improvement: float = 0.0,
@@ -226,16 +228,16 @@ class GradientBoostedTreesClassifier(
 
     def __sklearn_tags__(self):
         # https://scikit-learn.org/stable/developers/develop.html
-        tags = super().__sklearn_tags__()
+        tags = super().__sklearn_tags__()  # type: ignore
         tags.classifier_tags.multi_class = False
         return tags
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "GradientBoostedTreesClassifier":
         X, y = validate_data(self, X, y)
-        # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
+
         check_classification_targets(y)
 
-        y_type = type_of_target(y, input_name="y", raise_unknown=True)
+        y_type = type_of_target(y, input_name="y", raise_unknown=True)  # type: ignore
         if y_type != "binary":
             raise ValueError(
                 "Only binary classification is supported. The type of the target "
@@ -275,12 +277,9 @@ class GradientBoostedTreesClassifier(
 
         return self
 
-    def predict_proba(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("trees_", "classes_", "gammas_", "n_features_in_"))
         X = validate_data(self, X, reset=False)
-        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
-        if X.shape[1] != self.n_features_in_:
-            raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
         g = np.ones(X.shape[0]) * self.start_estimate_
 
