@@ -15,8 +15,7 @@ def test_leaf_weight_binary_classification_friedman2001():
     y = np.array([1, 2, 3])
     g = np.array([1, 2, 3]) * 2
     assert (
-        leafweights.leaf_weight_binary_classification_friedman2001(y=y, g=g)
-        == -0.375
+        leafweights.leaf_weight_binary_classification_friedman2001(y=y, g=g) == -0.375
     )
 
 
@@ -25,10 +24,7 @@ def test_leaf_weight_xgboost():
     g = np.array([1, 2, 3]) * 2
     h = np.array([1, 2, 3]) * 4
     params = utils.TreeGrowthParameters(max_depth=2, lam=0.0)
-    assert (
-        leafweights.leaf_weight_xgboost(y=y, g=g, h=h, growth_params=params)
-        == -0.5
-    )
+    assert leafweights.leaf_weight_xgboost(y=y, g=g, h=h, growth_params=params) == -0.5
 
 
 class TestLeafWeightSchemes:
@@ -44,21 +40,19 @@ class TestLeafWeightSchemes:
 
         for scheme in mean_schemes:
             assert (
-                leafweights.LeafWeightSchemes[scheme].value.func
+                leafweights.LeafWeightSchemes[scheme].value
                 is leafweights.leaf_weight_mean
             )
 
     def test_leaf_weight_xgboost_references(self):
         assert (
-            leafweights.LeafWeightSchemes["xgboost"].value.func
+            leafweights.LeafWeightSchemes["xgboost"].value
             is leafweights.leaf_weight_xgboost
         )
 
     def test_leaf_weight_friedman_references(self):
         assert (
-            leafweights.LeafWeightSchemes[
-                "friedman_binary_classification"
-            ].value.func
+            leafweights.LeafWeightSchemes["friedman_binary_classification"].value
             is leafweights.leaf_weight_binary_classification_friedman2001
         )
 

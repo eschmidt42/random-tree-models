@@ -1,5 +1,4 @@
-from enum import Enum
-from functools import partial
+from enum import Enum, member
 
 import numpy as np
 
@@ -210,16 +209,16 @@ class IncrementingScore:
 
 class SplitScoreMetrics(Enum):
     # https://stackoverflow.com/questions/40338652/how-to-define-enum-values-that-are-functions
-    variance = partial(calc_variance)
-    entropy = partial(calc_entropy)
-    entropy_rs = partial(calc_entropy_rs)
-    gini = partial(calc_gini_impurity)
-    gini_rs = partial(calc_gini_impurity_rs)
+    variance = member(calc_variance)
+    entropy = member(calc_entropy)
+    entropy_rs = member(calc_entropy_rs)
+    gini = member(calc_gini_impurity)
+    gini_rs = member(calc_gini_impurity_rs)
     # variance for split score because Friedman et al. 2001 in Algorithm 1
     # step 4 minimize the squared error between actual and predicted dloss/dyhat
-    friedman_binary_classification = partial(calc_variance)
-    xgboost = partial(calc_xgboost_split_score)
-    incrementing = partial(IncrementingScore())
+    friedman_binary_classification = member(calc_variance)
+    xgboost = member(calc_xgboost_split_score)
+    incrementing = member(IncrementingScore())
 
     def __call__(
         self,

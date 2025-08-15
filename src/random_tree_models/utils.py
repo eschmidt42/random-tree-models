@@ -1,8 +1,8 @@
 import logging
 from enum import Enum
+from typing import Any
 
-from pydantic import StrictFloat, StrictInt
-from pydantic.dataclasses import dataclass
+from pydantic import BaseModel, StrictFloat, StrictInt
 from rich.logging import RichHandler
 
 
@@ -19,14 +19,14 @@ class ThresholdSelectionMethod(Enum):
     uniform = "uniform"
 
 
-@dataclass
-class ThresholdSelectionParameters:
+class ThresholdSelectionParameters(BaseModel):
     method: ThresholdSelectionMethod
     quantile: StrictFloat = 0.1
     random_state: StrictInt = 0
     n_thresholds: StrictInt = 100
+    num_quantile_steps: StrictInt = -1
 
-    def __post_init__(self):
+    def model_post_init(self, context: Any):
         # verify method
         # expected = ThresholdSelectionMethod.__members__.keys()
         # is_okay = self.method in expected
@@ -57,14 +57,12 @@ class ThresholdSelectionParameters:
         self.num_quantile_steps = int(1 / self.quantile) + 1
 
 
-@dataclass
-class ColumnSelectionParameters:
+class ColumnSelectionParameters(BaseModel):
     method: ColumnSelectionMethod
     n_trials: StrictInt | None = None
 
 
-@dataclass
-class TreeGrowthParameters:
+class TreeGrowthParameters(BaseModel):
     max_depth: StrictInt
     min_improvement: StrictFloat = 0.0
     # xgboost lambda - multiplied with sum of squares of leaf weights
@@ -74,13 +72,16 @@ class TreeGrowthParameters:
     frac_features: StrictFloat = 1.0
     random_state: StrictInt = 0
     threshold_params: ThresholdSelectionParameters = ThresholdSelectionParameters(
-        ThresholdSelectionMethod.bruteforce, 0.1, 0, 100
+        method=ThresholdSelectionMethod.bruteforce,
+        quantile=0.1,
+        random_state=0,
+        n_thresholds=100,
     )
     column_params: ColumnSelectionParameters = ColumnSelectionParameters(
-        ColumnSelectionMethod.ascending, None
+        method=ColumnSelectionMethod.ascending, n_trials=None
     )
 
-    def __post_init__(self):
+    def model_post_init(self, context: Any):
         # verify frac_subsamples
         is_okay = 0.0 < self.frac_subsamples <= 1.0
         if not is_okay:
