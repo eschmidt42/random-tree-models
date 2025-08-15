@@ -4,11 +4,13 @@ import numpy as np
 import pandas as pd
 from rich.progress import track
 from sklearn import base
-from sklearn.utils.multiclass import check_classification_targets
-from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
+from sklearn.utils.multiclass import check_classification_targets, type_of_target
+from sklearn.utils.validation import (
+    check_is_fitted,
+    validate_data,
+)
 
 import random_tree_models.decisiontree as dtree
-import random_tree_models.gradientboostedtrees as gbt
 
 
 class RandomForestTemplate(base.BaseEstimator):
@@ -18,7 +20,7 @@ class RandomForestTemplate(base.BaseEstimator):
         measure_name: str = None,
         max_depth: int = 2,
         min_improvement: float = 0.0,
-        force_all_finite: bool = True,
+        ensure_all_finite: bool = True,
         frac_subsamples: float = 1.0,
         frac_features: float = 1.0,
         random_state: int = 42,
@@ -28,7 +30,7 @@ class RandomForestTemplate(base.BaseEstimator):
         self.max_depth = max_depth
         self.min_improvement = min_improvement
         self.n_trees = n_trees
-        self.force_all_finite = force_all_finite
+        self.ensure_all_finite = ensure_all_finite
         self.frac_subsamples = frac_subsamples
         self.frac_features = frac_features
         self.random_state = random_state
@@ -44,31 +46,49 @@ class RandomForestTemplate(base.BaseEstimator):
         raise NotImplementedError()
 
 
-class RandomForestRegressor(RandomForestTemplate, base.RegressorMixin):
+class RandomForestRegressor(base.RegressorMixin, RandomForestTemplate):
     """Random forest regressor
 
     Breiman et al. 2001, Random Forests
     https://doi.org/10.1023/A:1010933404324
     """
 
-    def __init__(self, measure_name: str = "variance", **kwargs) -> None:
-        super().__init__(measure_name=measure_name, **kwargs)
+    def __init__(
+        self,
+        measure_name: str = "variance",
+        n_trees: int = 3,
+        max_depth: int = 2,
+        min_improvement: float = 0.0,
+        ensure_all_finite: bool = True,
+        frac_subsamples: float = 1.0,
+        frac_features: float = 1.0,
+        random_state: int = 42,
+    ) -> None:
+        super().__init__(
+            measure_name=measure_name,
+            n_trees=n_trees,
+            max_depth=max_depth,
+            min_improvement=min_improvement,
+            ensure_all_finite=ensure_all_finite,
+            frac_subsamples=frac_subsamples,
+            frac_features=frac_features,
+            random_state=random_state,
+        )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "RandomForestRegressor":
-        X, y = check_X_y(X, y, force_all_finite=self.force_all_finite)
-        self.n_features_in_ = X.shape[1]
+        # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
+        X, y = validate_data(self, X, y)
+        # self.n_features_in_ = X.shape[1]
 
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
         rng = np.random.RandomState(self.random_state)
-        for _ in track(
-            range(self.n_trees), total=self.n_trees, description="tree"
-        ):
+        for _ in track(range(self.n_trees), total=self.n_trees, description="tree"):
             # train decision tree to predict differences
             new_tree = dtree.DecisionTreeRegressor(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
-                force_all_finite=self.force_all_finite,
+                ensure_all_finite=self.ensure_all_finite,
                 frac_subsamples=self.frac_subsamples,
                 frac_features=self.frac_features,
                 random_state=rng.randint(0, 2**32 - 1),
@@ -80,7 +100,8 @@ class RandomForestRegressor(RandomForestTemplate, base.RegressorMixin):
 
     def predict(self, X: np.ndarray, aggregation: str = "mean") -> np.ndarray:
         check_is_fitted(self, ("trees_", "n_features_in_"))
-        X = check_array(X, force_all_finite=self.force_all_finite)
+        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
+        X = validate_data(self, X, reset=False)
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
@@ -99,15 +120,34 @@ class RandomForestRegressor(RandomForestTemplate, base.RegressorMixin):
         return y
 
 
-class RandomForestClassifier(RandomForestTemplate, base.ClassifierMixin):
+class RandomForestClassifier(base.ClassifierMixin, RandomForestTemplate):
     """Random forest classifier
 
     Breiman et al. 2001, Random Forests
     https://doi.org/10.1023/A:1010933404324
     """
 
-    def __init__(self, measure_name: str = "gini", **kwargs) -> None:
-        super().__init__(measure_name=measure_name, **kwargs)
+    def __init__(
+        self,
+        measure_name: str = "gini",
+        n_trees: int = 3,
+        max_depth: int = 2,
+        min_improvement: float = 0.0,
+        ensure_all_finite: bool = True,
+        frac_subsamples: float = 1.0,
+        frac_features: float = 1.0,
+        random_state: int = 42,
+    ) -> None:
+        super().__init__(
+            measure_name=measure_name,
+            n_trees=n_trees,
+            max_depth=max_depth,
+            min_improvement=min_improvement,
+            ensure_all_finite=ensure_all_finite,
+            frac_subsamples=frac_subsamples,
+            frac_features=frac_features,
+            random_state=random_state,
+        )
 
     def _more_tags(self) -> T.Dict[str, bool]:
         """Describes to scikit-learn parametrize_with_checks the scope of this class
@@ -116,25 +156,38 @@ class RandomForestClassifier(RandomForestTemplate, base.ClassifierMixin):
         """
         return {"binary_only": True}
 
+    def __sklearn_tags__(self):
+        # https://scikit-learn.org/stable/developers/develop.html
+        tags = super().__sklearn_tags__()
+        tags.classifier_tags.multi_class = False
+        return tags
+
     def fit(self, X: np.ndarray, y: np.ndarray) -> "RandomForestClassifier":
-        X, y = check_X_y(X, y, force_all_finite=self.force_all_finite)
+        # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
+        X, y = validate_data(self, X, y)
         check_classification_targets(y)
+
+        y_type = type_of_target(y, input_name="y", raise_unknown=True)
+        if y_type != "binary":
+            raise ValueError(
+                "Only binary classification is supported. The type of the target "
+                f"is {y_type}."
+            )
+
         if len(np.unique(y)) == 1:
             raise ValueError("Cannot train with only one class present")
 
-        self.n_features_in_ = X.shape[1]
+        # self.n_features_in_ = X.shape[1]
         self.classes_, y = np.unique(y, return_inverse=True)
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
 
         rng = np.random.RandomState(self.random_state)
-        for _ in track(
-            range(self.n_trees), description="tree", total=self.n_trees
-        ):
+        for _ in track(range(self.n_trees), description="tree", total=self.n_trees):
             new_tree = dtree.DecisionTreeClassifier(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
-                force_all_finite=self.force_all_finite,
+                ensure_all_finite=self.ensure_all_finite,
                 frac_subsamples=self.frac_subsamples,
                 frac_features=self.frac_features,
                 random_state=rng.randint(0, 2**32 - 1),
@@ -149,13 +202,12 @@ class RandomForestClassifier(RandomForestTemplate, base.ClassifierMixin):
     ) -> np.ndarray:
         check_is_fitted(self, ("trees_", "classes_", "n_features_in_"))
 
-        X = check_array(X, force_all_finite=self.force_all_finite)
+        X = validate_data(self, X, reset=False)
+        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
-        proba = np.zeros(
-            (X.shape[0], self.n_trees, len(self.classes_)), dtype=float
-        )
+        proba = np.zeros((X.shape[0], self.n_trees, len(self.classes_)), dtype=float)
 
         for i, tree in track(
             enumerate(self.trees_), description="tree", total=len(self.trees_)

@@ -1,6 +1,7 @@
 import logging
 
 import pytest
+from pydantic import ValidationError
 
 import random_tree_models.utils as utils
 
@@ -131,9 +132,7 @@ class TestTreeGrowthParameters:
                 random_state=0,
                 n_thresholds=100,
             ),
-            column_params=utils.ColumnSelectionParameters(
-                method="random", n_trials=10
-            ),
+            column_params=utils.ColumnSelectionParameters(method="random", n_trials=10),
         )
         assert params.max_depth == 10
         assert params.min_improvement == 0.0
@@ -141,9 +140,7 @@ class TestTreeGrowthParameters:
         assert params.frac_subsamples == 1.0
         assert params.frac_features == 1.0
         assert params.random_state == 0
-        assert isinstance(
-            params.threshold_params, utils.ThresholdSelectionParameters
-        )
+        assert isinstance(params.threshold_params, utils.ThresholdSelectionParameters)
         assert isinstance(params.column_params, utils.ColumnSelectionParameters)
 
     @pytest.mark.parametrize(
@@ -197,12 +194,8 @@ class TestTreeGrowthParameters:
                 pytest.fail(f"init with {frac_features=} should fail: {ex}")
 
     def test_fail_if_max_depth_missing(self):
-        try:
-            _ = utils.TreeGrowthParameters()
-        except TypeError as ex:
-            pytest.xfail(f"init without max_depth should fail: {ex}")
-        else:
-            pytest.fail(f"init without max_depth should have failed: {ex}")
+        with pytest.raises(ValidationError):
+            _ = utils.TreeGrowthParameters()  # type: ignore
 
 
 def test_get_logger():

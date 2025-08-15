@@ -4,7 +4,7 @@ from functools import partial
 import numpy as np
 
 import random_tree_models.utils as utils
-from random_tree_models import rs_gini_impurity, rs_entropy
+from random_tree_models import rs_entropy, rs_gini_impurity
 
 
 def check_y_and_target_groups(y: np.ndarray, target_groups: np.ndarray = None):
@@ -73,9 +73,7 @@ def calc_entropy(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
     return h
 
 
-def calc_entropy_rs(
-    y: np.ndarray, target_groups: np.ndarray, **kwargs
-) -> float:
+def calc_entropy_rs(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
     """Calculates the entropy of a split"""
 
     check_y_and_target_groups(y, target_groups=target_groups)
@@ -113,9 +111,7 @@ def gini_impurity(y: np.ndarray) -> float:
     return -g
 
 
-def calc_gini_impurity(
-    y: np.ndarray, target_groups: np.ndarray, **kwargs
-) -> float:
+def calc_gini_impurity(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
     """Calculates the gini impurity of a split
 
     Based on: https://scikit-learn.org/stable/modules/tree.html#classification-criteria
@@ -133,9 +129,7 @@ def calc_gini_impurity(
     return g
 
 
-def calc_gini_impurity_rs(
-    y: np.ndarray, target_groups: np.ndarray, **kwargs
-) -> float:
+def calc_gini_impurity_rs(y: np.ndarray, target_groups: np.ndarray, **kwargs) -> float:
     """Calculates the gini impurity of a split
 
     Based on: https://scikit-learn.org/stable/modules/tree.html#classification-criteria
@@ -231,10 +225,10 @@ class SplitScoreMetrics(Enum):
         self,
         y: np.ndarray,
         target_groups: np.ndarray,
-        yhat: np.ndarray = None,
-        g: np.ndarray = None,
-        h: np.ndarray = None,
-        growth_params: utils.TreeGrowthParameters = None,
+        yhat: np.ndarray | None = None,
+        g: np.ndarray | None = None,
+        h: np.ndarray | None = None,
+        growth_params: utils.TreeGrowthParameters | None = None,
     ) -> float:
         return self.value(
             y, target_groups, yhat=yhat, g=g, h=h, growth_params=growth_params

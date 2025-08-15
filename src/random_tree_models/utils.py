@@ -28,12 +28,12 @@ class ThresholdSelectionParameters:
 
     def __post_init__(self):
         # verify method
-        expected = ThresholdSelectionMethod.__members__.keys()
-        is_okay = self.method in expected
-        if not is_okay:
-            raise ValueError(
-                f"passed value for method ('{self.method}') not one of {expected}"
-            )
+        # expected = ThresholdSelectionMethod.__members__.keys()
+        # is_okay = self.method in expected
+        # if not is_okay:
+        #     raise ValueError(
+        #         f"passed value for method ('{self.method}') not one of {expected}"
+        #     )
 
         # verify quantile
         is_okay = 0.0 < self.quantile < 1.0
@@ -60,7 +60,7 @@ class ThresholdSelectionParameters:
 @dataclass
 class ColumnSelectionParameters:
     method: ColumnSelectionMethod
-    n_trials: StrictInt = None
+    n_trials: StrictInt | None = None
 
 
 @dataclass
@@ -73,8 +73,8 @@ class TreeGrowthParameters:
     frac_subsamples: StrictFloat = 1.0
     frac_features: StrictFloat = 1.0
     random_state: StrictInt = 0
-    threshold_params: ThresholdSelectionParameters = (
-        ThresholdSelectionParameters("bruteforce", 0.1, 0, 100)
+    threshold_params: ThresholdSelectionParameters = ThresholdSelectionParameters(
+        ThresholdSelectionMethod.bruteforce, 0.1, 0, 100
     )
     column_params: ColumnSelectionParameters = ColumnSelectionParameters(
         ColumnSelectionMethod.ascending, None

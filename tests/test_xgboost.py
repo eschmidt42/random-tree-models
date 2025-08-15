@@ -3,7 +3,6 @@ import pytest
 from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.decisiontree as dtree
-import random_tree_models.gradientboostedtrees as gbt
 import random_tree_models.xgboost as xgboost
 
 
@@ -41,10 +40,7 @@ class TestXGBoostRegressor:
         model = xgboost.XGBoostRegressor()
         model.fit(self.X, self.y)
         assert all(
-            [
-                isinstance(model, dtree.DecisionTreeRegressor)
-                for model in model.trees_
-            ]
+            [isinstance(model, dtree.DecisionTreeRegressor) for model in model.trees_]
         )
 
     def test_predict(self):
@@ -75,10 +71,7 @@ class TestXGBoostClassifier:
         model.fit(self.X, self.y)
         assert not hasattr(self.model, "classes_")
         assert all(
-            [
-                isinstance(model, dtree.DecisionTreeRegressor)
-                for model in model.trees_
-            ]
+            [isinstance(model, dtree.DecisionTreeRegressor) for model in model.trees_]
         )
 
     def test_predict(self):
@@ -88,10 +81,7 @@ class TestXGBoostClassifier:
         assert (predictions == self.y).all()
 
 
-@pytest.mark.slow
-@parametrize_with_checks(
-    [xgboost.XGBoostRegressor(), xgboost.XGBoostClassifier()]
-)
+@parametrize_with_checks([xgboost.XGBoostRegressor(), xgboost.XGBoostClassifier()])
 def test_xgboost_estimators_with_sklearn_checks(estimator, check):
     """Test of estimators using scikit-learn test suite
 
@@ -115,9 +105,7 @@ def test_compute_start_estimate_binomial_loglikelihood(
 ):
     try:
         # line to test
-        start_estimate = xgboost.compute_start_estimate_binomial_loglikelihood(
-            y_float
-        )
+        start_estimate = xgboost.compute_start_estimate_binomial_loglikelihood(y_float)
     except ValueError as ex:
         if start_estimate_exp is None:
             pytest.xfail(f"expectedly failed for non -1 and 1 values")

@@ -40,10 +40,7 @@ class TestGradientBoostedTreesRegressor:
         model = gbt.GradientBoostedTreesRegressor()
         model.fit(self.X, self.y)
         assert all(
-            [
-                isinstance(model, dtree.DecisionTreeRegressor)
-                for model in model.trees_
-            ]
+            [isinstance(model, dtree.DecisionTreeRegressor) for model in model.trees_]
         )
 
     def test_predict(self):
@@ -74,10 +71,7 @@ class TestGradientBoostedTreesClassifier:
         model.fit(self.X, self.y)
         assert not hasattr(self.model, "classes_")
         assert all(
-            [
-                isinstance(model, dtree.DecisionTreeRegressor)
-                for model in model.trees_
-            ]
+            [isinstance(model, dtree.DecisionTreeRegressor) for model in model.trees_]
         )
 
     def test_predict(self):
@@ -87,7 +81,6 @@ class TestGradientBoostedTreesClassifier:
         assert (predictions == self.y).all()
 
 
-@pytest.mark.slow
 @parametrize_with_checks(
     [gbt.GradientBoostedTreesRegressor(), gbt.GradientBoostedTreesClassifier()]
 )
@@ -120,7 +113,5 @@ def test_bool_to_float(x, exp, is_bad: bool):
             pytest.xfail("Failed expectedly to convert non-bool values")
     else:
         if is_bad:
-            pytest.fail(
-                f"Passed unexpectedly for non-bool value {x} returning {res}"
-            )
+            pytest.fail(f"Passed unexpectedly for non-bool value {x} returning {res}")
         assert res == exp

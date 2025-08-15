@@ -15,8 +15,11 @@ from pydantic import (
 from pydantic.dataclasses import dataclass
 from rich import print as rprint
 from rich.tree import Tree
-from sklearn.utils.multiclass import check_classification_targets
-from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
+from sklearn.utils.multiclass import check_classification_targets, type_of_target
+from sklearn.utils.validation import (
+    check_is_fitted,
+    validate_data,
+)
 
 import random_tree_models.leafweights as leafweights
 import random_tree_models.scoring as scoring
@@ -28,7 +31,7 @@ logger = utils.logger
 @dataclass(validate_on_init=True)
 class SplitScore:
     name: StrictStr  # name of the score used
-    value: StrictFloat = None  # optimization value gini etc
+    value: StrictFloat | None = None  # optimization value gini etc
 
 
 @dataclass
@@ -36,22 +39,22 @@ class Node:
     """Decision node in a decision tree"""
 
     # Stuff for making a decision
-    array_column: StrictInt = None  # index of the column to use
-    threshold: float = None  # threshold for decision
-    prediction: float = None  # value to use for predictions
-    default_is_left: bool = None  # default direction is x is nan
+    array_column: StrictInt | None = None  # index of the column to use
+    threshold: float | None = None  # threshold for decision
+    prediction: float | None = None  # value to use for predictions
+    default_is_left: bool | None = None  # default direction is x is nan
 
     # decendants
-    left: "Node" = None  # left decendant of type Node
-    right: "Node" = None  # right decendany of type Node
+    right: "Node | None" = None  # right decendany of type Node
+    left: "Node | None" = None  # left decendant of type Node
 
     # misc info
-    measure: SplitScore = None
+    measure: SplitScore | None = None
 
-    n_obs: StrictInt = None  # number of observations in node
-    reason: StrictStr = None  # place for some comment
+    n_obs: StrictInt | None = None  # number of observations in node
+    reason: StrictStr | None = None  # place for some comment
 
-    depth: StrictInt = None  # depth of the node
+    depth: StrictInt | None = None  # depth of the node
 
     def __post_init__(self):
         # unique identifier of the node
@@ -62,9 +65,7 @@ class Node:
         return self.left is None and self.right is None
 
 
-def check_is_baselevel(
-    y: np.ndarray, depth: int, max_depth: int
-) -> T.Tuple[bool, str]:
+def check_is_baselevel(y: np.ndarray, depth: int, max_depth: int) -> T.Tuple[bool, str]:
     """Verifies if the tree traversal reached the baselevel / a leaf
     * group homogeneous / cannot sensibly be splitted further
     * no data in the group
@@ -86,7 +87,7 @@ class BestSplit:
     column: StrictInt
     threshold: StrictFloat
     target_groups: np.ndarray = Field(default_factory=lambda: np.zeros(10))
-    default_is_left: StrictBool = None
+    default_is_left: StrictBool | None = None
 
 
 def select_thresholds(
@@ -122,16 +123,14 @@ def select_thresholds(
         )
         return rng.choice(x[1:], size=[1])
     else:
-        raise NotImplementedError(
-            f"Unknown threshold selection method: {method}"
-        )
+        raise NotImplementedError(f"Unknown threshold selection method: {method}")
 
 
 def get_thresholds_and_target_groups(
     feature_values: np.ndarray,
     threshold_params: utils.ThresholdSelectionParameters,
     rng: np.random.RandomState,
-) -> T.Generator[T.Tuple[np.ndarray, np.ndarray, bool], None, None]:
+) -> T.Generator[T.Tuple[np.ndarray, np.ndarray, bool | None], None, None]:
     "Creates a generator for split finding, returning the used threshold, the target groups and a bool indicating if the default direction is left"
     is_missing = np.isnan(feature_values)
     is_finite = np.logical_not(is_missing)
@@ -146,21 +145,15 @@ def get_thresholds_and_target_groups(
             yield (threshold, target_groups, default_direction_is_left)
     else:
         finite_feature_values = feature_values[is_finite]
-        thresholds = select_thresholds(
-            finite_feature_values, threshold_params, rng
-        )
+        thresholds = select_thresholds(finite_feature_values, threshold_params, rng)
 
         for threshold in thresholds:
             # default direction left - feature value <= threshold or missing  (i.e. missing are included left of the threshold)
-            target_groups = np.logical_or(
-                feature_values < threshold, is_missing
-            )
+            target_groups = np.logical_or(feature_values < threshold, is_missing)
             yield (threshold, target_groups, True)
 
             # default direction right - feature value <= threshold and finite (i.e. missing are included right of the threshold)
-            target_groups = np.logical_and(
-                feature_values < threshold, is_finite
-            )
+            target_groups = np.logical_and(feature_values < threshold, is_finite)
             yield (threshold, target_groups, False)
 
 
@@ -183,9 +176,7 @@ def get_column(
         deltas = X.max(axis=0) - X.min(axis=0)
         weights = deltas / deltas.sum()
         columns = np.array(columns)
-        columns = rng.choice(
-            columns, p=weights, size=len(columns), replace=False
-        )
+        columns = rng.choice(columns, p=weights, size=len(columns), replace=False)
     else:
         raise NotImplementedError(
             f"Unknown column selection method: {column_params.method}"
@@ -200,10 +191,10 @@ def find_best_split(
     X: np.ndarray,
     y: np.ndarray,
     measure_name: str,
-    yhat: np.ndarray = None,
-    g: np.ndarray = None,
-    h: np.ndarray = None,
-    growth_params: utils.TreeGrowthParameters = None,
+    yhat: np.ndarray | None = None,
+    g: np.ndarray | None = None,
+    h: np.ndarray | None = None,
+    growth_params: utils.TreeGrowthParameters | None = None,  # TODO: make required
     rng: np.random.RandomState = np.random.RandomState(42),
 ) -> BestSplit:
     """Find the best split, detecting the "default direction" with missing data."""
@@ -214,6 +205,9 @@ def find_best_split(
         )
 
     best = None  # this will be an BestSplit instance
+
+    if growth_params is None:
+        raise ValueError(f"{growth_params=} but is not allowed to be None")
 
     for array_column in get_column(X, growth_params.column_params, rng):
         feature_values = X[:, array_column]
@@ -243,6 +237,8 @@ def find_best_split(
                     default_is_left=default_is_left,
                 )
 
+    if best is None:
+        raise ValueError(f"Something went wrong {best=} cannot be None.")
     return best
 
 
@@ -250,7 +246,7 @@ def check_if_split_sensible(
     best: BestSplit,
     parent_node: Node,
     growth_params: utils.TreeGrowthParameters,
-) -> bool:
+) -> tuple[bool, float | None]:
     "Verifies if split is sensible, considering score gain and left/right group sizes"
     if parent_node is None or parent_node.measure.value is None:
         return False, None
@@ -276,9 +272,7 @@ def calc_leaf_weight_and_split_score(
     g: np.ndarray,
     h: np.ndarray,
 ) -> T.Tuple[float]:
-    leaf_weight = leafweights.calc_leaf_weight(
-        y, measure_name, growth_params, g=g, h=h
-    )
+    leaf_weight = leafweights.calc_leaf_weight(y, measure_name, growth_params, g=g, h=h)
 
     yhat = leaf_weight * np.ones_like(y)
     score = scoring.SplitScoreMetrics[measure_name](
@@ -500,6 +494,8 @@ class DecisionTreeTemplate(base.BaseEstimator):
         column_method: utils.ColumnSelectionMethod = "ascending",
         n_columns_to_try: int = None,
         random_state: int = 42,
+        ensure_all_finite: bool = True,
+        # **kwargs
     ) -> None:
         self.max_depth = max_depth
         self.measure_name = measure_name
@@ -513,6 +509,7 @@ class DecisionTreeTemplate(base.BaseEstimator):
         self.n_thresholds = n_thresholds
         self.column_method = column_method
         self.n_columns_to_try = n_columns_to_try
+        self.ensure_all_finite = ensure_all_finite
 
     def _organize_growth_parameters(self):
         self.growth_params_ = utils.TreeGrowthParameters(
@@ -565,9 +562,7 @@ class DecisionTreeTemplate(base.BaseEstimator):
         _y = y[ix_samples]
         return _X, _y, ix_features
 
-    def _select_features(
-        self, X: np.ndarray, ix_features: np.ndarray
-    ) -> np.ndarray:
+    def _select_features(self, X: np.ndarray, ix_features: np.ndarray) -> np.ndarray:
         return X[:, ix_features]
 
     def fit(
@@ -590,11 +585,35 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
     def __init__(
         self,
         measure_name: str = "variance",
-        force_all_finite: bool = True,
-        **kwargs,
+        max_depth: int = 2,
+        min_improvement: float = 0.0,
+        lam: float = 0.0,
+        frac_subsamples: float = 1.0,
+        frac_features: float = 1.0,
+        threshold_method: utils.ThresholdSelectionMethod = "bruteforce",
+        threshold_quantile: float = 0.1,
+        n_thresholds: int = 100,
+        column_method: utils.ColumnSelectionMethod = "ascending",
+        n_columns_to_try: int = None,
+        random_state: int = 42,
+        ensure_all_finite: bool = True,
+        # **kwargs,
     ) -> None:
-        super().__init__(measure_name=measure_name, **kwargs)
-        self.force_all_finite = force_all_finite
+        super().__init__(
+            measure_name=measure_name,
+            max_depth=max_depth,
+            min_improvement=min_improvement,
+            lam=lam,
+            frac_subsamples=frac_subsamples,
+            frac_features=frac_features,
+            threshold_method=threshold_method,
+            threshold_quantile=threshold_quantile,
+            n_thresholds=n_thresholds,
+            column_method=column_method,
+            n_columns_to_try=n_columns_to_try,
+            random_state=random_state,
+            ensure_all_finite=ensure_all_finite,
+        )
 
     def fit(
         self,
@@ -603,8 +622,9 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
         **kwargs,
     ) -> "DecisionTreeRegressor":
         self._organize_growth_parameters()
-        X, y = check_X_y(X, y, force_all_finite=self.force_all_finite)
-        self.n_features_in_ = X.shape[1]
+        # X, y = check_X_y(X, y, force_all_finite=self.ensure_all_finite)
+        X, y = validate_data(self, X, y)
+        # self.n_features_in_ = X.shape[1]
 
         _X, _y, self.ix_features_ = self._select_samples_and_features(X, y)
 
@@ -622,7 +642,8 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
     def predict(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         check_is_fitted(self, ("tree_", "growth_params_"))
 
-        X = check_array(X, force_all_finite=self.force_all_finite)
+        X = validate_data(self, X, reset=False)
+        # X = check_array(X, force_all_finite=self.ensure_all_finite)
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
@@ -642,11 +663,34 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
     def __init__(
         self,
         measure_name: str = "gini",
-        force_all_finite: bool = True,
-        **kwargs,
+        max_depth: int = 2,
+        min_improvement: float = 0.0,
+        lam: float = 0.0,
+        frac_subsamples: float = 1.0,
+        frac_features: float = 1.0,
+        threshold_method: utils.ThresholdSelectionMethod = "bruteforce",
+        threshold_quantile: float = 0.1,
+        n_thresholds: int = 100,
+        column_method: utils.ColumnSelectionMethod = "ascending",
+        n_columns_to_try: int = None,
+        random_state: int = 42,
+        ensure_all_finite: bool = True,
     ) -> None:
-        super().__init__(measure_name=measure_name, **kwargs)
-        self.force_all_finite = force_all_finite
+        super().__init__(
+            measure_name=measure_name,
+            max_depth=max_depth,
+            min_improvement=min_improvement,
+            lam=lam,
+            frac_subsamples=frac_subsamples,
+            frac_features=frac_features,
+            threshold_method=threshold_method,
+            threshold_quantile=threshold_quantile,
+            n_thresholds=n_thresholds,
+            column_method=column_method,
+            n_columns_to_try=n_columns_to_try,
+            random_state=random_state,
+        )
+        self.ensure_all_finite = ensure_all_finite
 
     def _more_tags(self) -> T.Dict[str, bool]:
         """Describes to scikit-learn parametrize_with_checks the scope of this class
@@ -655,19 +699,34 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
         """
         return {"binary_only": True}
 
+    def __sklearn_tags__(self):
+        # https://scikit-learn.org/stable/developers/develop.html
+        tags = super().__sklearn_tags__()
+        tags.classifier_tags.multi_class = False
+        return tags
+
     def fit(
         self,
         X: T.Union[pd.DataFrame, np.ndarray],
         y: T.Union[pd.Series, np.ndarray],
     ) -> "DecisionTreeClassifier":
-        X, y = check_X_y(X, y, force_all_finite=self.force_all_finite)
+        X, y = validate_data(self, X, y)
+        # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
         check_classification_targets(y)
+
+        y_type = type_of_target(y, input_name="y", raise_unknown=True)
+        if y_type != "binary":
+            raise ValueError(
+                "Only binary classification is supported. The type of the target "
+                f"is {y_type}."
+            )
+
         if len(np.unique(y)) == 1:
             raise ValueError("Cannot train with only one class present")
 
         self._organize_growth_parameters()
 
-        self.n_features_in_ = X.shape[1]
+        # self.n_features_in_ = X.shape[1]
         self.classes_, y = np.unique(y, return_inverse=True)
 
         _X, _y, self.ix_features_ = self._select_samples_and_features(X, y)
@@ -684,8 +743,8 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
 
     def predict_proba(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         check_is_fitted(self, ("tree_", "classes_", "growth_params_"))
-
-        X = check_array(X, force_all_finite=self.force_all_finite)
+        X = validate_data(self, X, reset=False)
+        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 

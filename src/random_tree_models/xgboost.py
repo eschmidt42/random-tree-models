@@ -9,6 +9,7 @@ Key aspects:
 * histogram / percentiles for splits
 * sparsity-aware split finding / "default direction" for missing values
 """
+
 import math
 import typing as T
 
@@ -16,8 +17,14 @@ import numpy as np
 import pandas as pd
 from rich.progress import track
 from sklearn import base
-from sklearn.utils.multiclass import check_classification_targets, unique_labels
-from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
+from sklearn.utils.multiclass import (
+    check_classification_targets,
+    type_of_target,
+)
+from sklearn.utils.validation import (
+    check_is_fitted,
+    validate_data,
+)
 
 import random_tree_models.decisiontree as dtree
 import random_tree_models.gradientboostedtrees as gbt
@@ -31,7 +38,7 @@ class XGBoostTemplate(base.BaseEstimator):
         max_depth: int = 2,
         min_improvement: float = 0.0,
         lam: float = 0.0,
-        force_all_finite: bool = True,
+        ensure_all_finite: bool = True,
         use_hist: bool = False,
         n_bins: int = 256,
     ) -> None:
@@ -41,7 +48,7 @@ class XGBoostTemplate(base.BaseEstimator):
         self.min_improvement = min_improvement
         self.n_trees = n_trees
         self.lam = lam
-        self.force_all_finite = force_all_finite
+        self.ensure_all_finite = ensure_all_finite
         self.use_hist = use_hist
         self.n_bins = n_bins
 
@@ -117,7 +124,7 @@ def xgboost_histogrammify_with_x_bin_edges(
     return X_hist
 
 
-class XGBoostRegressor(XGBoostTemplate, base.RegressorMixin):
+class XGBoostRegressor(base.RegressorMixin, XGBoostTemplate):
     """XGBoost regressor
 
     Chen et al. 2016, XGBoost: A Scalable Tree Boosting System
@@ -125,17 +132,16 @@ class XGBoostRegressor(XGBoostTemplate, base.RegressorMixin):
     """
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "XGBoostRegressor":
-        X, y = check_X_y(X, y, force_all_finite=self.force_all_finite)
-        self.n_features_in_ = X.shape[1]
+        X, y = validate_data(self, X, y)
+        # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
+        # self.n_features_in_ = X.shape[1]
 
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
 
         self.start_estimate_ = np.mean(y)
 
         # initial differences to predict using negative squared error loss
-        g, h = compute_derivatives_negative_least_squares(
-            y, self.start_estimate_
-        )
+        g, h = compute_derivatives_negative_least_squares(y, self.start_estimate_)
         if self.use_hist:
             X_hist, all_x_bin_edges = xgboost_histogrammify_with_h(
                 X, h, n_bins=self.n_bins
@@ -143,16 +149,14 @@ class XGBoostRegressor(XGBoostTemplate, base.RegressorMixin):
             self.all_x_bin_edges_ = all_x_bin_edges
             X = X_hist
 
-        for _ in track(
-            range(self.n_trees), total=self.n_trees, description="tree"
-        ):
+        for _ in track(range(self.n_trees), total=self.n_trees, description="tree"):
             # train decision tree to predict differences
             new_tree = dtree.DecisionTreeRegressor(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
                 lam=self.lam,
-                force_all_finite=self.force_all_finite,
+                ensure_all_finite=self.ensure_all_finite,
             )
             new_tree.fit(X, y, g=g, h=h)
             self.trees_.append(new_tree)
@@ -164,7 +168,8 @@ class XGBoostRegressor(XGBoostTemplate, base.RegressorMixin):
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("trees_", "n_features_in_", "start_estimate_"))
-        X = check_array(X, force_all_finite=self.force_all_finite)
+        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
+        X = validate_data(self, X, reset=False)
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
@@ -215,7 +220,7 @@ def compute_derivatives_binomial_loglikelihood(
     return g, h
 
 
-class XGBoostClassifier(XGBoostTemplate, base.ClassifierMixin):
+class XGBoostClassifier(base.ClassifierMixin, XGBoostTemplate):
     """XGBoost classifier
 
     Chen et al. 2016, XGBoost: A Scalable Tree Boosting System
@@ -233,13 +238,28 @@ class XGBoostClassifier(XGBoostTemplate, base.ClassifierMixin):
         """
         return {"binary_only": True}
 
+    def __sklearn_tags__(self):
+        # https://scikit-learn.org/stable/developers/develop.html
+        tags = super().__sklearn_tags__()
+        tags.classifier_tags.multi_class = False
+        return tags
+
     def fit(self, X: np.ndarray, y: np.ndarray) -> "XGBoostClassifier":
-        X, y = check_X_y(X, y, force_all_finite=self.force_all_finite)
+        X, y = validate_data(self, X, y)
+
         check_classification_targets(y)
+
+        y_type = type_of_target(y, input_name="y", raise_unknown=True)
+        if y_type != "binary":
+            raise ValueError(
+                "Only binary classification is supported. The type of the target "
+                f"is {y_type}."
+            )
+
         if len(np.unique(y)) == 1:
             raise ValueError("Cannot train with only one class present")
 
-        self.n_features_in_ = X.shape[1]
+        # self.n_features_in_ = X.shape[1]
         self.classes_, y = np.unique(y, return_inverse=True)
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
         self.gammas_ = []
@@ -252,9 +272,7 @@ class XGBoostClassifier(XGBoostTemplate, base.ClassifierMixin):
         self.start_estimate_ = compute_start_estimate_binomial_loglikelihood(y)
         yhat = np.ones_like(y) * self.start_estimate_
 
-        for _ in track(
-            range(self.n_trees), description="tree", total=self.n_trees
-        ):
+        for _ in track(range(self.n_trees), description="tree", total=self.n_trees):
             g, h = compute_derivatives_binomial_loglikelihood(y, yhat)
 
             if self.use_hist:
@@ -270,7 +288,7 @@ class XGBoostClassifier(XGBoostTemplate, base.ClassifierMixin):
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
                 lam=self.lam,
-                force_all_finite=self.force_all_finite,
+                ensure_all_finite=self.ensure_all_finite,
             )
             new_tree.fit(_X, y, g=g, h=h)
             self.trees_.append(new_tree)
@@ -281,11 +299,9 @@ class XGBoostClassifier(XGBoostTemplate, base.ClassifierMixin):
         return self
 
     def predict_proba(self, X: T.Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
-        check_is_fitted(
-            self, ("trees_", "classes_", "gammas_", "n_features_in_")
-        )
-
-        X = check_array(X, force_all_finite=self.force_all_finite)
+        check_is_fitted(self, ("trees_", "classes_", "gammas_", "n_features_in_"))
+        X = validate_data(self, X, reset=False)
+        # X = check_array(X, ensure_all_finite=self.ensure_all_finite)
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"{X.shape[1]=} != {self.n_features_in_=}")
 
