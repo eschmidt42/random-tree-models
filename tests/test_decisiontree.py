@@ -9,6 +9,7 @@ from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.decisiontree as dtree
 import random_tree_models.utils as utils
+from random_tree_models.utils import ThresholdSelectionMethod
 
 # first value in each tuple is the value to test and the second is the flag indicating if this should work
 BOOL_OPTIONS_NONE_OKAY = [(False, True), (True, True), ("blub", False)]
@@ -233,9 +234,11 @@ class Test_select_thresholds:
     """
 
     def test_bruteforce(self):
-        params = utils.ThresholdSelectionParameters(method="bruteforce")
+        params = utils.ThresholdSelectionParameters(
+            method=ThresholdSelectionMethod.bruteforce
+        )
         feature_values = np.linspace(-1, 1, 100)
-        rng = None
+        rng = np.random.RandomState(42)
 
         # line to test
         thresholds = dtree.select_thresholds(feature_values, params, rng=rng)
@@ -243,9 +246,11 @@ class Test_select_thresholds:
         assert np.allclose(thresholds, feature_values[1:])
 
     def test_random_when_to_few_values(self):
-        params = utils.ThresholdSelectionParameters(method="random", n_thresholds=1000)
+        params = utils.ThresholdSelectionParameters(
+            method=ThresholdSelectionMethod.random, n_thresholds=1000
+        )
         feature_values = np.linspace(-1, 1, 100)
-        rng = None
+        rng = np.random.RandomState(42)
 
         # line to test
         thresholds = dtree.select_thresholds(feature_values, params, rng=rng)
@@ -255,7 +260,7 @@ class Test_select_thresholds:
     def test_random_when_enough_values(self):
         n_thresholds = 10
         params = utils.ThresholdSelectionParameters(
-            method="random", n_thresholds=n_thresholds
+            method=ThresholdSelectionMethod.random, n_thresholds=n_thresholds
         )
         feature_values = np.linspace(-1, 1, 100)
         rng = np.random.RandomState(42)
@@ -269,7 +274,7 @@ class Test_select_thresholds:
     def test_random_reproducible(self):
         n_thresholds = 10
         params = utils.ThresholdSelectionParameters(
-            method="random", n_thresholds=n_thresholds
+            method=ThresholdSelectionMethod.random, n_thresholds=n_thresholds
         )
         feature_values = np.linspace(-1, 1, 100)
 
@@ -284,7 +289,7 @@ class Test_select_thresholds:
     def test_random_produces_changing_thresholds(self):
         n_thresholds = 10
         params = utils.ThresholdSelectionParameters(
-            method="random", n_thresholds=n_thresholds
+            method=ThresholdSelectionMethod.random, n_thresholds=n_thresholds
         )
         feature_values = np.linspace(-1, 1, 100)
         rng = np.random.RandomState(42)
@@ -298,7 +303,9 @@ class Test_select_thresholds:
     def test_quantile(self):
         n_thresholds = 10
         params = utils.ThresholdSelectionParameters(
-            method="quantile", n_thresholds=n_thresholds, quantile=0.1
+            method=ThresholdSelectionMethod.quantile,
+            n_thresholds=n_thresholds,
+            quantile=0.1,
         )
         feature_values = np.linspace(-1, 1, 100)
         rng = np.random.RandomState(42)
@@ -312,7 +319,7 @@ class Test_select_thresholds:
     def test_uniform(self):
         n_thresholds = 10
         params = utils.ThresholdSelectionParameters(
-            method="uniform", n_thresholds=n_thresholds
+            method=ThresholdSelectionMethod.uniform, n_thresholds=n_thresholds
         )
         rng = np.random.RandomState(42)
         feature_values = rng.normal(loc=0, scale=1, size=100)
@@ -335,7 +342,9 @@ class Test_get_thresholds_and_target_groups:
 
     def test_produces_generator(self):
         feature_values = np.linspace(-1, 1, 10)
-        threshold_params = utils.ThresholdSelectionParameters(method="bruteforce")
+        threshold_params = utils.ThresholdSelectionParameters(
+            method=ThresholdSelectionMethod.bruteforce
+        )
         rng = np.random.RandomState(42)
 
         # line to test
@@ -347,25 +356,29 @@ class Test_get_thresholds_and_target_groups:
 
     def test_finite_only_case(self):
         feature_values = np.linspace(-1, 1, 10)
-        threshold_params = utils.ThresholdSelectionParameters(method="bruteforce")
+        threshold_params = utils.ThresholdSelectionParameters(
+            method=ThresholdSelectionMethod.bruteforce
+        )
         rng = np.random.RandomState(42)
 
         # line to test
-        for i, (
+        thresholds_and_target_groups = dtree.get_thresholds_and_target_groups(
+            feature_values, threshold_params, rng=rng
+        )
+
+        c = 0
+        for (
             threshold,
             target_groups,
             default_direction_is_left,
-        ) in enumerate(
-            dtree.get_thresholds_and_target_groups(
-                feature_values, threshold_params, rng=rng
-            )
-        ):
+        ) in thresholds_and_target_groups:
             assert isinstance(target_groups, np.ndarray)
             assert threshold in feature_values[1:]
             assert target_groups.dtype == bool
             assert default_direction_is_left is None
+            c += 1
 
-        assert i == len(feature_values[1:]) - 1
+        assert c == len(feature_values[1:])
 
     def test_with_missing_case(self):
         feature_values = np.linspace(-1, 1, 10)
@@ -931,9 +944,9 @@ class Test_grow_tree:
                 self.X,
                 self.y,
                 self.measure_name,
+                growth_params=growth_params,
                 parent_node=parent_node,
                 depth=self.depth_dummy,
-                growth_params=growth_params,
             )
 
             mock_check_is_baselevel.assert_called_once()
@@ -981,9 +994,9 @@ class Test_grow_tree:
                 self.X,
                 self.y,
                 self.measure_name,
+                growth_params=growth_params,
                 parent_node=parent_node,
                 depth=self.depth_dummy,
-                growth_params=growth_params,
             )
 
             mock_check_is_baselevel.assert_called_once()
@@ -1036,9 +1049,9 @@ class Test_grow_tree:
                 self.X,
                 self.y,
                 self.measure_name,
+                growth_params=growth_params,
                 parent_node=parent_node,
                 depth=self.depth_dummy,
-                growth_params=growth_params,
             )
 
             assert mock_check_is_baselevel.call_count == 3

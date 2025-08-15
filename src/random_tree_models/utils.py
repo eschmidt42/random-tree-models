@@ -1,18 +1,18 @@
 import logging
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, StrictFloat, StrictInt
 from rich.logging import RichHandler
 
 
-class ColumnSelectionMethod(Enum):
+class ColumnSelectionMethod(StrEnum):
     ascending = "ascending"
     largest_delta = "largest_delta"
     random = "random"
 
 
-class ThresholdSelectionMethod(Enum):
+class ThresholdSelectionMethod(StrEnum):
     bruteforce = "bruteforce"
     quantile = "quantile"
     random = "random"

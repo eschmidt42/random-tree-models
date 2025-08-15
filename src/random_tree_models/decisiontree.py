@@ -18,7 +18,7 @@ from rich.tree import Tree
 from sklearn.utils.multiclass import check_classification_targets, type_of_target
 from sklearn.utils.validation import (
     check_is_fitted,
-    validate_data,
+    validate_data,  # type: ignore
 )
 
 import random_tree_models.leafweights as leafweights
@@ -161,7 +161,7 @@ def get_column(
     X: np.ndarray,
     column_params: utils.ColumnSelectionParameters,
     rng: np.random.RandomState,
-) -> T.List[int]:
+) -> list[int]:
     # select column order to split on
     method = column_params.method
     n_columns_to_try = column_params.n_trials
@@ -172,11 +172,13 @@ def get_column(
     elif method == utils.ColumnSelectionMethod.random:
         columns = np.array(columns)
         rng.shuffle(columns)
+        columns = columns.tolist()
     elif method == utils.ColumnSelectionMethod.largest_delta:
         deltas = X.max(axis=0) - X.min(axis=0)
         weights = deltas / deltas.sum()
         columns = np.array(columns)
         columns = rng.choice(columns, p=weights, size=len(columns), replace=False)
+        columns = columns.tolist()
     else:
         raise NotImplementedError(
             f"Unknown column selection method: {column_params.method}"
@@ -184,7 +186,7 @@ def get_column(
     if n_columns_to_try is not None:
         columns = columns[:n_columns_to_try]
 
-    return list(columns)
+    return columns
 
 
 def find_best_split(
@@ -248,17 +250,26 @@ def check_if_split_sensible(
     growth_params: utils.TreeGrowthParameters,
 ) -> tuple[bool, float | None]:
     "Verifies if split is sensible, considering score gain and left/right group sizes"
-    if parent_node is None or parent_node.measure.value is None:
+    parent_is_none = parent_node is None
+    if parent_is_none:
+        return False, None
+
+    measure_is_none = parent_node.measure is None
+    if measure_is_none:
+        return False, None
+
+    value_is_none = parent_node.measure.value is None  # type: ignore
+    if value_is_none:
         return False, None
 
     # score gain
-    gain = best.score - parent_node.measure.value
+    gain = best.score - parent_node.measure.value  # type: ignore
     is_insufficient_gain = gain < growth_params.min_improvement
 
     # left/right group assignment
-    is_all_onesided = (
-        best.target_groups.all() or np.logical_not(best.target_groups).all()
-    )
+    all_on_one_side = bool(best.target_groups.all())
+    all_on_other_side = bool(np.logical_not(best.target_groups).all())
+    is_all_onesided = all_on_one_side or all_on_other_side
 
     is_not_sensible = is_all_onesided or is_insufficient_gain
 
@@ -271,7 +282,7 @@ def calc_leaf_weight_and_split_score(
     growth_params: utils.TreeGrowthParameters,
     g: np.ndarray,
     h: np.ndarray,
-) -> T.Tuple[float]:
+) -> tuple[float, float]:
     leaf_weight = leafweights.calc_leaf_weight(y, measure_name, growth_params, g=g, h=h)
 
     yhat = leaf_weight * np.ones_like(y)
@@ -294,7 +305,7 @@ def select_arrays_for_child_node(
     y: np.ndarray,
     g: np.ndarray,
     h: np.ndarray,
-) -> T.Tuple[np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None]:
     mask = best.target_groups == go_left
     _X = X[mask, :]
     _y = y[mask]
@@ -307,11 +318,11 @@ def grow_tree(
     X: np.ndarray,
     y: np.ndarray,
     measure_name: str,
-    parent_node: Node = None,
+    growth_params: utils.TreeGrowthParameters,
+    parent_node: Node | None = None,
     depth: int = 0,
-    growth_params: utils.TreeGrowthParameters = None,
-    g: np.ndarray = None,
-    h: np.ndarray = None,
+    g: np.ndarray | None = None,
+    h: np.ndarray | None = None,
     random_state: int = 42,
     **kwargs,
 ) -> Node:
@@ -361,7 +372,7 @@ def grow_tree(
     if is_baselevel:  # end of the line buddy
         return Node(
             prediction=leaf_weight,
-            measure=SplitScore(measure_name, score=score),
+            measure=SplitScore(measure_name, value=score),
             n_obs=n_obs,
             reason=reason,
             depth=depth,
@@ -383,7 +394,7 @@ def grow_tree(
         reason = f"gain due split ({gain=}) lower than {growth_params.min_improvement=} or all data points assigned to one side (is left {best.target_groups.mean()=:.2%})"
         leaf_node = Node(
             prediction=leaf_weight,
-            measure=SplitScore(measure_name, score=score),
+            measure=SplitScore(measure_name, value=score),
             n_obs=n_obs,
             reason=reason,
             depth=depth,
@@ -409,9 +420,9 @@ def grow_tree(
         _X,
         _y,
         measure_name=measure_name,
+        growth_params=growth_params,
         parent_node=new_node,
         depth=depth + 1,
-        growth_params=growth_params,
         g=_g,
         h=_h,
         random_state=random_state_left,
@@ -423,9 +434,9 @@ def grow_tree(
         _X,
         _y,
         measure_name=measure_name,
+        growth_params=growth_params,
         parent_node=new_node,
         depth=depth + 1,
-        growth_params=growth_params,
         g=_g,
         h=_h,
         random_state=random_state_right,
