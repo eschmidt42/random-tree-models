@@ -222,7 +222,7 @@ def find_best_split(
             feature_values, growth_params.threshold_params, rng
         ):
             split_score = scoring.calc_split_score(
-                scoring.SplitScoreMetrics(measure_name),
+                scoring.MetricNames(measure_name),
                 y,
                 target_groups,
                 yhat=yhat,
@@ -279,16 +279,16 @@ def check_if_split_sensible(
 
 def calc_leaf_weight_and_split_score(
     y: np.ndarray,
-    measure_name: str,
+    measure_name: scoring.MetricNames,
     growth_params: utils.TreeGrowthParameters,
-    g: np.ndarray,
-    h: np.ndarray,
+    g: np.ndarray | None = None,
+    h: np.ndarray | None = None,
 ) -> tuple[float, float]:
     leaf_weight = leafweights.calc_leaf_weight(y, measure_name, growth_params, g=g, h=h)
 
     yhat = leaf_weight * np.ones_like(y)
     score = scoring.calc_split_score(
-        scoring.SplitScoreMetrics(measure_name),
+        measure_name,
         y,
         np.ones_like(y, dtype=bool),
         yhat=yhat,

@@ -1,17 +1,16 @@
-from enum import Enum, member
-
 import numpy as np
 
 import random_tree_models.utils as utils
+from random_tree_models import scoring
+from random_tree_models.scoring import MetricNames
 
 
-def leaf_weight_mean(y: np.ndarray, **kwargs) -> float:
-    return np.mean(y)
+def leaf_weight_mean(y: np.ndarray) -> float:
+    return float(np.mean(y))
 
 
 def leaf_weight_binary_classification_friedman2001(
     g: np.ndarray,
-    **kwargs,
 ) -> float:
     "Computes optimal leaf weight as in Friedman et al. 2001 Algorithm 5"
 
@@ -24,7 +23,6 @@ def leaf_weight_xgboost(
     growth_params: utils.TreeGrowthParameters,
     g: np.ndarray,
     h: np.ndarray,
-    **kwargs,
 ) -> float:
     "Computes optimal leaf weight as in Chen et al. 2016 equation 5"
 
@@ -32,36 +30,13 @@ def leaf_weight_xgboost(
     return w
 
 
-class LeafWeightSchemes(Enum):
-    # https://stackoverflow.com/questions/40338652/how-to-define-enum-values-that-are-functions
-    friedman_binary_classification = member(
-        leaf_weight_binary_classification_friedman2001
-    )
-    variance = member(leaf_weight_mean)
-    entropy = member(leaf_weight_mean)
-    entropy_rs = member(leaf_weight_mean)
-    gini = member(leaf_weight_mean)
-    gini_rs = member(leaf_weight_mean)
-    xgboost = member(leaf_weight_xgboost)
-    incrementing = member(leaf_weight_mean)
-
-    def __call__(
-        self,
-        y: np.ndarray,
-        growth_params: utils.TreeGrowthParameters,
-        g: np.ndarray = None,
-        h: np.ndarray = None,
-    ) -> float:
-        return self.value(y=y, growth_params=growth_params, g=g, h=h)
-
-
 def calc_leaf_weight(
     y: np.ndarray,
-    measure_name: str,
+    measure_name: scoring.MetricNames,
     growth_params: utils.TreeGrowthParameters,
-    g: np.ndarray = None,
-    h: np.ndarray = None,
-) -> float:
+    g: np.ndarray | None = None,
+    h: np.ndarray | None = None,
+) -> float | None:
     """Calculates the leaf weight, depending on the choice of measure_name.
 
     This computation assumes all y values are part of the same leaf.
@@ -70,7 +45,25 @@ def calc_leaf_weight(
     if len(y) == 0:
         return None
 
-    weight_func = LeafWeightSchemes[measure_name]
-    leaf_weight = weight_func(y=y, growth_params=growth_params, g=g, h=h)
-
-    return leaf_weight
+    match measure_name:
+        case (
+            MetricNames.variance
+            | MetricNames.entropy
+            | MetricNames.entropy_rs
+            | MetricNames.gini
+            | MetricNames.gini_rs
+            | MetricNames.incrementing
+        ):
+            return leaf_weight_mean(y)
+        case MetricNames.friedman_binary_classification:
+            if g is None:
+                raise ValueError(f"{g=} cannot be None for {measure_name=}")
+            return leaf_weight_binary_classification_friedman2001(g)
+        case MetricNames.xgboost:
+            if g is None or h is None:
+                raise ValueError(f"{g=} and {h=} cannot be None for {measure_name=}")
+            return leaf_weight_xgboost(growth_params, g, h)
+        case _:
+            raise NotImplementedError(
+                f"calc_split_score is not implemented for {measure_name=}."
+            )

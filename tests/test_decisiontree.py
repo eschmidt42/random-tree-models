@@ -9,6 +9,7 @@ from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.decisiontree as dtree
 import random_tree_models.utils as utils
+from random_tree_models import scoring
 from random_tree_models.utils import ThresholdSelectionMethod
 
 # first value in each tuple is the value to test and the second is the flag indicating if this should work
@@ -860,7 +861,7 @@ def test_calc_leaf_weight_and_split_score():
     # calls leafweights.calc_leaf_weight and scoreing.SplitScoreMetrics
     # and returns two floats
     y = np.array([True, True, False])
-    measure_name = "gini"
+    measure_name = scoring.MetricNames.gini
     growth_params = utils.TreeGrowthParameters(max_depth=2)
     g = np.array([1, 2, 3])
     h = np.array([4, 5, 6])

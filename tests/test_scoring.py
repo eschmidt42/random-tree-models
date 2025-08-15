@@ -376,42 +376,42 @@ class TestSplitScoreMetrics:
 
     def test_gini(self):
         g = scoring.calc_split_score(
-            scoring.SplitScoreMetrics.gini, self.y, self.target_groups
+            scoring.MetricNames.gini, self.y, self.target_groups
         )
         # g = scoring.SplitScoreMetrics["gini"](self.y, self.target_groups)
         assert g == self.g_exp
 
     def test_gini_rs(self):
         g = scoring.calc_split_score(
-            scoring.SplitScoreMetrics.gini_rs, self.y, self.target_groups
+            scoring.MetricNames.gini_rs, self.y, self.target_groups
         )
         # g = scoring.SplitScoreMetrics["gini_rs"](self.y, self.target_groups)
         assert g == self.g_exp
 
     def test_entropy(self):
         h = scoring.calc_split_score(
-            scoring.SplitScoreMetrics.entropy, self.y, self.target_groups
+            scoring.MetricNames.entropy, self.y, self.target_groups
         )
         # h = scoring.SplitScoreMetrics["entropy"](self.y, self.target_groups)
         assert h == self.h_exp
 
     def test_entropy_rs(self):
         h = scoring.calc_split_score(
-            scoring.SplitScoreMetrics.entropy_rs, self.y, self.target_groups
+            scoring.MetricNames.entropy_rs, self.y, self.target_groups
         )
         # h = scoring.SplitScoreMetrics["entropy_rs"](self.y, self.target_groups)
         assert h == self.h_exp
 
     def test_variance(self):
         var = scoring.calc_split_score(
-            scoring.SplitScoreMetrics.variance, self.y, self.target_groups
+            scoring.MetricNames.variance, self.y, self.target_groups
         )
         # var = scoring.SplitScoreMetrics["variance"](self.y, self.target_groups)
         assert var == self.var_exp
 
     def test_friedman_binary_classification(self):
         var = scoring.calc_split_score(
-            scoring.SplitScoreMetrics.friedman_binary_classification,
+            scoring.MetricNames.friedman_binary_classification,
             self.y,
             self.target_groups,
         )
