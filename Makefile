@@ -3,56 +3,30 @@ SHELL = /bin/bash
 .PHONY: help
 help:
 	@echo "Commands:"
-	@echo "venv    : creates the virtual environment in .venv."
-	@echo "install : install dependencies into virtual environment."
-	@echo "compile : update the environment requirements after changes to dependencies in pyproject.toml."
-	@echo "update  : Install new requriements into the virtual environment."
-	@echo "test    : run pytests."
-
-# create a virtual environment
-.PHONY: venv
-venv:
-	python3 -m venv .venv
-	source .venv/bin/activate && \
-	python3 -m pip install pip==23.0.1 setuptools==67.6.1 wheel==0.40.0 && \
-	pip install pip-tools==6.12.3
-
-# ==============================================================================
-# install requirements
-# ==============================================================================
-
-req-file := config/requirements.txt
+	@echo "install  : install dependencies into virtual environment."
+	@echo "install-dev  : install all, including dev, dependencies into virtual environment for local development."
+	@echo "update   : Install new requriements into the virtual environment."
+	@echo "test     : Run pytests."
+	@echo "coverage : Run pytest with coverage report"
 
 
-# environment for production
 .PHONY: install
-install: venv
-	source .venv/bin/activate && \
-	pip-sync $(req-file) && \
-	pip install -e . && \
-	pre-commit install
+install:
+	uv sync
 
-# ==============================================================================
-# compile requirements
-# ==============================================================================
-
-.PHONY: compile
-compile:
-	source .venv/bin/activate && \
-	pip-compile pyproject.toml -o $(req-file) --resolver=backtracking
-
-# ==============================================================================
-# update requirements and virtual env
-# ==============================================================================
+.PHONY: install-dev
+install-dev:
+	uv sync --all-extras --dev && \
+	uv run pre-commit install
 
 .PHONY: update
 update:
 	uv sync --reinstall
 
-# ==============================================================================
-# run tests
-# ==============================================================================
-
 .PHONY: test
 test:
-	uv run pytest -vx .
+	uv run pytest -vx tests
+
+.PHONY: coverage
+coverage:
+	uv run pytest --cov=src --cov-report html tests
