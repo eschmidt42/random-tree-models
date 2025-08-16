@@ -11,18 +11,22 @@ help:
 	@echo "coverage       : Run pytest with coverage report"
 
 
-.PHONY: install
-install:
+.PHONY: install-tests
+install-tests:
 	uv sync
+
+.PHONY: install-test-notebooks
+install-test-notebooks:
+	uv sync --group nb
 
 .PHONY: install-dev
 install-dev:
-	uv sync --all-extras --dev && \
+	uv sync --all-extras && \
 	uv run pre-commit install
 
 .PHONY: update
 update:
-	uv sync --reinstall
+	uv sync --reinstall --group dev
 
 .PHONY: test
 test:
