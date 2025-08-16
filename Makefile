@@ -3,11 +3,12 @@ SHELL = /bin/bash
 .PHONY: help
 help:
 	@echo "Commands:"
-	@echo "install  : install dependencies into virtual environment."
-	@echo "install-dev  : install all, including dev, dependencies into virtual environment for local development."
-	@echo "update   : Install new requriements into the virtual environment."
-	@echo "test     : Run pytests."
-	@echo "coverage : Run pytest with coverage report"
+	@echo "install        : Install dependencies into virtual environment."
+	@echo "install-dev    : Install all, including dev, dependencies into virtual environment for local development."
+	@echo "update         : Install new requriements into the virtual environment."
+	@echo "test           : Run pytests."
+	@echo "test-notebooks : Execute all notebooks in nbs/."
+	@echo "coverage       : Run pytest with coverage report"
 
 
 .PHONY: install
@@ -26,6 +27,12 @@ update:
 .PHONY: test
 test:
 	uv run pytest -vx tests
+
+.PHONY: test-notebooks
+test-notebooks:
+	set -e; for notebook in nbs/*.ipynb; do \
+		uv run jupyter execute "$$notebook"; \
+	done
 
 .PHONY: coverage
 coverage:
