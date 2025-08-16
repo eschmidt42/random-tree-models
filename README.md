@@ -6,7 +6,9 @@
 
 * `src/random_tree_models/` -> python implementation of tree algorithms
 * `tests/` -> unit tests
-* `nbs/` -> jupyter notebooks to play with the tree algorithms
+* `nbs/`
+  * `nbs/core` -> core jupyter notebooks to play with the tree algorithms
+  * `nbs/dev` -> other jupyter notebooks for other activities
 * `config/` -> requirements.txt
 
 ## setup

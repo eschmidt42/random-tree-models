@@ -13,11 +13,13 @@ dependencies = [
     "rich>=13.3.5",
     "scikit-learn>=1.2.2",
     "seaborn>=0.12.2",
-
 ]
 
 [project.scripts]
 random-tree-models = "random_tree_models:main"
+
+[tool.uv]
+default-groups = ["test"]
 
 [tool.maturin]
 module-name = "random_tree_models._core"
@@ -29,15 +31,19 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [dependency-groups]
-dev = [
+test = [
     "pytest>=7.3.1",
-    "black>=23.3.0",
+]
+nb = [
     "ipywidgets>=8.0.6",
-    "isort>=5.12.0",
     "jupyter-contrib-nbextensions>=0.7.0",
     "jupyterlab>=4.0.0",
+]
+dev = [
     "pre-commit>=3.3.2",
     "snakeviz>=2.2.0",
     "pip-audit>=2.9.0",
     "pytest-cov>=6.2.1",
+     {include-group = "nb"},
+     {include-group = "test"},
 ]
