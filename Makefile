@@ -31,7 +31,7 @@ test:
 .PHONY: test-notebooks
 test-notebooks:
 	set -e; for notebook in nbs/core/*.ipynb; do \
-		uv run jupyter execute "$$notebook"; \
+		uv run jupyter execute --timeout=60 "$$notebook"; \
 	done
 
 .PHONY: coverage
