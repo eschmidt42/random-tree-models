@@ -106,7 +106,7 @@ def xgboost_histogrammify_with_h(
 
         rank_bin_edges = np.histogram_bin_edges(rank, bins=n_bins)
         bin_assignments = pd.cut(
-            rank, bins=rank_bin_edges, labels=False, include_lowest=True
+            rank, bins=rank_bin_edges.tolist(), labels=False, include_lowest=True
         )
 
         x_bin_edges = np.interp(rank_bin_edges, rank, x_ordered)
@@ -126,7 +126,7 @@ def xgboost_histogrammify_with_x_bin_edges(
 
     for i in range(X.shape[1]):
         bin_assignments = pd.cut(
-            X[:, i], bins=all_x_bin_edges[i], labels=False, include_lowest=True
+            X[:, i], bins=all_x_bin_edges[i].tolist(), labels=False, include_lowest=True
         )
 
         X_hist[:, i] = bin_assignments
