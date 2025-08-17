@@ -77,7 +77,7 @@ def test_BestSplit(score, column, threshold, target_groups, default_is_left):
         if is_okay:
             raise ex
         else:
-            pytest.xfail("BestSplit validation failed as expected")
+            pass  # BestSplit validation failed as expected
     else:
         if is_bad:
             pytest.fail(
@@ -472,7 +472,7 @@ class Test_find_best_split:
             )
         except ValueError as ex:
             if is_homogenous:
-                pytest.xfail("Splitting a homogneous y failed as expected")
+                pass  # Splitting a homogneous y failed as expected
             else:
                 raise ex
         else:
@@ -524,7 +524,7 @@ class Test_find_best_split:
             )
         except ValueError as ex:
             if is_homogenous:
-                pytest.xfail("Splitting a homogneous y failed as expected")
+                pass  # Splitting a homogneous y failed as expected
             else:
                 raise ex
         else:
@@ -576,7 +576,7 @@ class Test_find_best_split:
             )
         except ValueError as ex:
             if is_homogenous:
-                pytest.xfail("Splitting a homogneous y failed as expected")
+                pass  # Splitting a homogneous y failed as expected
             else:
                 raise ex
         else:
@@ -629,7 +629,7 @@ class Test_find_best_split:
             )
         except ValueError as ex:
             if is_homogenous:
-                pytest.xfail("Splitting a homogneous y failed as expected")
+                pass  # Splitting a homogneous y failed as expected
             else:
                 raise ex
         else:

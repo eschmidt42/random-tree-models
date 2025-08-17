@@ -14,16 +14,12 @@ class TestRandomForestTemplate:
         assert not hasattr(self.model, "trees_")
 
     def test_fit(self):
-        try:
+        with pytest.raises(NotImplementedError):
             self.model.fit(None, None)  # type: ignore
-        except NotImplementedError as ex:
-            pytest.xfail("RandomForestTemplate.fit expectedly refused call")
 
     def test_predict(self):
-        try:
+        with pytest.raises(NotImplementedError):
             self.model.predict(None)  # type: ignore
-        except NotImplementedError as ex:
-            pytest.xfail("RandomForestTemplate.predict expectedly refused call")
 
 
 class TestRandomForestRegressor:

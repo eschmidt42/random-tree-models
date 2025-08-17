@@ -14,16 +14,12 @@ class TestGradientBoostedTreesTemplate:
         assert not hasattr(self.model, "trees_")
 
     def test_fit(self):
-        try:
+        with pytest.raises(NotImplementedError):
             self.model.fit(None, None)  # type: ignore
-        except NotImplementedError as ex:
-            pytest.xfail("DecisionTreeTemplate.fit expectedly refused call")
 
     def test_predict(self):
-        try:
+        with pytest.raises(NotImplementedError):
             self.model.predict(None)  # type: ignore
-        except NotImplementedError as ex:
-            pytest.xfail("DecisionTreeTemplate.predict expectedly refused call")
 
 
 class TestGradientBoostedTreesRegressor:
@@ -112,7 +108,7 @@ def test_bool_to_float(x, exp, is_bad: bool):
         res = gbt.bool_to_float(x)
     except ValueError as ex:
         if is_bad:
-            pytest.xfail("Failed expectedly to convert non-bool values")
+            pass  # Failed expectedly to convert non-bool values
     else:
         if is_bad:
             pytest.fail(f"Passed unexpectedly for non-bool value {x} returning {res}")

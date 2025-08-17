@@ -30,16 +30,12 @@ class TestDecisionTreeTemplate:
         )
 
     def test_fit(self):
-        try:
+        with pytest.raises(NotImplementedError):
             self.model.fit(None, None)  # type: ignore
-        except NotImplementedError as ex:
-            pytest.xfail("DecisionTreeTemplate.fit expectedly refused call")
 
     def test_predict(self):
-        try:
+        with pytest.raises(NotImplementedError):
             self.model.predict(None)  # type: ignore
-        except NotImplementedError as ex:
-            pytest.xfail("DecisionTreeTemplate.predict expectedly refused call")
 
     def test_select_samples_and_features_no_sampling(self):
         self.model.frac_features = 1.0

@@ -14,16 +14,12 @@ class TestXGBoostTemplate:
         assert not hasattr(self.model, "trees_")
 
     def test_fit(self):
-        try:
+        with pytest.raises(NotImplementedError):
             self.model.fit(None, None)  # type: ignore
-        except NotImplementedError as ex:
-            pytest.xfail("XGBoostTemplate.fit expectedly refused call")
 
     def test_predict(self):
-        try:
+        with pytest.raises(NotImplementedError):
             self.model.predict(None)  # type: ignore
-        except NotImplementedError as ex:
-            pytest.xfail("XGBoostTemplate.predict expectedly refused call")
 
 
 class TestXGBoostRegressor:
@@ -112,7 +108,7 @@ def test_compute_start_estimate_binomial_loglikelihood(
         start_estimate = xgboost.compute_start_estimate_binomial_loglikelihood(y_float)
     except ValueError as ex:
         if start_estimate_exp is None:
-            pytest.xfail(f"expectedly failed for non -1 and 1 values")
+            pass  # expectedly failed for non -1 and 1 values
         else:
             raise ex
     else:
@@ -172,7 +168,7 @@ def test_compute_derivatives_binomial_loglikelihood(
         g, h = xgboost.compute_derivatives_binomial_loglikelihood(y_float, yhat)
     except ValueError as ex:
         if is_bad:
-            pytest.xfail("Expectedly failed for incorrect y_float values")
+            pass  # Expectedly failed for incorrect y_float values"
         else:
             raise ex
     else:
