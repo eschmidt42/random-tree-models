@@ -44,6 +44,8 @@ dev = [
     "snakeviz>=2.2.0",
     "pip-audit>=2.9.0",
     "pytest-cov>=6.2.1",
-     {include-group = "nb"},
-     {include-group = "test"},
+    "inline-snapshot>=0.27.2",
+    "dirty-equals>=0.9.0",
+    {include-group = "nb"},
+    {include-group = "test"},
 ]
