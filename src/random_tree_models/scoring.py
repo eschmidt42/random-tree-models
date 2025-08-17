@@ -1,9 +1,8 @@
-from enum import StrEnum, auto
-
 import numpy as np
 
-import random_tree_models.utils as utils
+import random_tree_models.params as utils
 from random_tree_models import rs_entropy, rs_gini_impurity
+from random_tree_models.params import MetricNames
 
 
 def check_y_and_target_groups(y: np.ndarray, target_groups: np.ndarray | None = None):
@@ -214,19 +213,6 @@ def calc_incrementing_score() -> float:
 def reset_incrementing_score():
     global INC_SCORE
     INC_SCORE = 0
-
-
-class MetricNames(StrEnum):
-    variance = auto()
-    entropy = auto()
-    entropy_rs = auto()
-    gini = auto()
-    gini_rs = auto()
-    # variance for split score because Friedman et al. 2001 in Algorithm 1
-    # step 4 minimize the squared error between actual and predicted dloss/dyhat
-    friedman_binary_classification = auto()
-    xgboost = auto()
-    incrementing = auto()
 
 
 def calc_split_score(

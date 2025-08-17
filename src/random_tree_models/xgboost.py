@@ -28,7 +28,7 @@ from sklearn.utils.validation import (
 
 import random_tree_models.decisiontree as dtree
 import random_tree_models.gradientboostedtrees as gbt
-from random_tree_models.scoring import MetricNames
+from random_tree_models.params import MetricNames
 
 
 class XGBoostTemplate(base.BaseEstimator):
