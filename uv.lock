@@ -2759,6 +2759,8 @@ nb = [
     { name = "jupyterlab" },
 ]
 test = [
+    { name = "dirty-equals" },
+    { name = "inline-snapshot" },
     { name = "pytest" },
 ]
 
@@ -2789,7 +2791,11 @@ nb = [
     { name = "jupyter-contrib-nbextensions", specifier = ">=0.7.0" },
     { name = "jupyterlab", specifier = ">=4.0.0" },
 ]
-test = [{ name = "pytest", specifier = ">=7.3.1" }]
+test = [
+    { name = "dirty-equals", specifier = ">=0.9.0" },
+    { name = "inline-snapshot", specifier = ">=0.27.2" },
+    { name = "pytest", specifier = ">=7.3.1" },
+]
 
 [[package]]
 name = "referencing"
