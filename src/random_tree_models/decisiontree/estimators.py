@@ -2,11 +2,16 @@ import typing as T
 
 import numpy as np
 import sklearn.base as base
+from sklearn.utils import ClassifierTags  # type: ignore
 from sklearn.utils.multiclass import check_classification_targets, type_of_target
 from sklearn.utils.validation import check_is_fitted, validate_data  # type: ignore
 
 from random_tree_models.decisiontree.node import Node
 from random_tree_models.decisiontree.predict import predict_with_tree
+from random_tree_models.decisiontree.random import (
+    get_random_feature_ids,
+    get_random_sample_ids,
+)
 from random_tree_models.decisiontree.train import grow_tree
 from random_tree_models.params import (
     ColumnSelectionMethod,
@@ -104,24 +109,10 @@ class DecisionTreeTemplate(base.BaseEstimator):
         if not hasattr(self, "growth_params_"):
             raise ValueError(f"Try calling `fit` first.")
 
-        ix = np.arange(len(X))
         rng = np.random.RandomState(self.growth_params_.random_state)
 
-        if self.growth_params_.frac_subsamples < 1.0:
-            n_samples = int(self.growth_params_.frac_subsamples * len(X))
-            ix_samples = rng.choice(ix, size=n_samples, replace=False)
-        else:
-            ix_samples = ix
-
-        if self.frac_features < 1.0:
-            n_columns = int(X.shape[1] * self.frac_features)
-            ix_features = rng.choice(
-                np.arange(X.shape[1]),
-                size=n_columns,
-                replace=False,
-            )
-        else:
-            ix_features = np.arange(X.shape[1])
+        ix_samples = get_random_sample_ids(X, rng, self.growth_params_.frac_subsamples)
+        ix_features = get_random_feature_ids(X, rng, self.growth_params_.frac_features)
 
         _X = X[ix_samples, :]
         _X = _X[:, ix_features]
@@ -254,16 +245,9 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
         )
         self.ensure_all_finite = ensure_all_finite
 
-    def _more_tags(self) -> T.Dict[str, bool]:
-        """Describes to scikit-learn parametrize_with_checks the scope of this class
-
-        Reference: https://scikit-learn.org/stable/developers/develop.html#estimator-tags
-        """
-        return {"binary_only": True}
-
     def __sklearn_tags__(self):
-        # https://scikit-learn.org/stable/developers/develop.html
-        tags = super().__sklearn_tags__()  # type: ignore
+        # https://scikit-learn.org/stable/developers/develop.html#estimator-tags
+        tags: ClassifierTags = super().__sklearn_tags__()  # type: ignore
         tags.classifier_tags.multi_class = False
         return tags
 
