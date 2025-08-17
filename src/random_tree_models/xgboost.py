@@ -27,8 +27,8 @@ from sklearn.utils.validation import (
 )
 
 import random_tree_models.decisiontree as dtree
-import random_tree_models.utils as gbt
-from random_tree_models.params import MetricNames
+from random_tree_models.params import MetricNames, is_greater_zero
+from random_tree_models.utils import vectorize_bool_to_float
 
 
 class XGBoostTemplate(base.BaseEstimator):
@@ -52,7 +52,7 @@ class XGBoostTemplate(base.BaseEstimator):
         use_hist: bool = False,
         n_bins: int = 256,
     ) -> None:
-        self.n_trees = n_trees
+        self.n_trees = is_greater_zero(n_trees)
         self.measure_name = measure_name
         self.max_depth = max_depth
         self.min_improvement = min_improvement
@@ -92,8 +92,10 @@ def xgboost_histogrammify_with_h(
     X: np.ndarray, h: np.ndarray, n_bins: int
 ) -> T.Tuple[np.ndarray, T.List[np.ndarray]]:
     """Converts X into a histogram representation using XGBoost paper eq 8 and 9 using 2nd order gradient statistics as weights"""
+
     X_hist = np.zeros_like(X, dtype=int)
     all_x_bin_edges = []
+
     for i in range(X.shape[1]):
         order = np.argsort(X[:, i])
         h_ordered = h[order]
@@ -122,12 +124,12 @@ def xgboost_histogrammify_with_x_bin_edges(
     X: np.ndarray, all_x_bin_edges: T.List[np.ndarray]
 ) -> np.ndarray:
     """Converts X into a histogram representation using XGBoost paper eq 8 and 9 using 2nd order gradient statistics as weights"""
+
     X_hist = np.zeros_like(X, dtype=int)
 
     for i in range(X.shape[1]):
-        bin_assignments = pd.cut(
-            X[:, i], bins=all_x_bin_edges[i].tolist(), labels=False, include_lowest=True
-        )
+        bins = all_x_bin_edges[i].tolist()
+        bin_assignments = pd.cut(X[:, i], bins=bins, labels=False, include_lowest=True)
 
         X_hist[:, i] = bin_assignments
 
@@ -143,8 +145,6 @@ class XGBoostRegressor(base.RegressorMixin, XGBoostTemplate):
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "XGBoostRegressor":
         X, y = validate_data(self, X, y, ensure_all_finite=False)
-        # X, y = check_X_y(X, y, ensure_all_finite=self.ensure_all_finite)
-        # self.n_features_in_ = X.shape[1]
 
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
 
@@ -211,6 +211,7 @@ def compute_start_estimate_binomial_loglikelihood(y_float: np.ndarray) -> float:
 
     ym = np.mean(y_float)
     start_estimate = 0.5 * math.log((1 + ym) / (1 - ym))
+
     return start_estimate
 
 
@@ -218,13 +219,16 @@ def compute_derivatives_binomial_loglikelihood(
     y_float: np.ndarray, yhat: np.ndarray
 ) -> T.Tuple[np.ndarray, np.ndarray]:
     "loss = - sum log(1+exp(2*y*yhat))"
+
     check_y_float(y_float)
+
     # differences to predict using binomial log-likelihood (yes, the negative of the negative :P)
     exp_y_yhat = np.exp(2 * y_float * yhat)
     g = 2 * y_float / (1 + exp_y_yhat)  # dloss/dyhat, g in the xgboost paper
-    h = -(
-        4 * y_float**2 * exp_y_yhat / (1 + exp_y_yhat) ** 2
-    )  # d^2loss/dyhat^2, h in the xgboost paper
+
+    # d^2loss/dyhat^2, h in the xgboost paper
+    h = -(4 * y_float**2 * exp_y_yhat / (1 + exp_y_yhat) ** 2)
+
     return g, h
 
 
@@ -234,17 +238,6 @@ class XGBoostClassifier(base.ClassifierMixin, XGBoostTemplate):
     Chen et al. 2016, XGBoost: A Scalable Tree Boosting System
     https://dl.acm.org/doi/10.1145/2939672.2939785
     """
-
-    def _bool_to_float(self, y: np.ndarray) -> np.ndarray:
-        f = np.vectorize(gbt.bool_to_float)
-        return f(y)
-
-    def _more_tags(self) -> T.Dict[str, bool]:
-        """Describes to scikit-learn parametrize_with_checks the scope of this class
-
-        Reference: https://scikit-learn.org/stable/developers/develop.html#estimator-tags
-        """
-        return {"binary_only": True}
 
     def __sklearn_tags__(self):
         # https://scikit-learn.org/stable/developers/develop.html
@@ -267,14 +260,13 @@ class XGBoostClassifier(base.ClassifierMixin, XGBoostTemplate):
         if len(np.unique(y)) == 1:
             raise ValueError("Cannot train with only one class present")
 
-        # self.n_features_in_ = X.shape[1]
         self.classes_, y = np.unique(y, return_inverse=True)
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
         self.gammas_ = []
         self.all_x_bin_edges_ = []
 
         # convert y from True/False to 1/-1 for binomial log-likelihood
-        y = self._bool_to_float(y)
+        y = vectorize_bool_to_float(y)
 
         # initial estimate
         self.start_estimate_ = compute_start_estimate_binomial_loglikelihood(y)
