@@ -43,7 +43,7 @@ class TestThresholdSelectionParameters:
                 method="wuppy", quantile=0.1, random_state=0, n_thresholds=100
             )
         except ValueError as ex:
-            pytest.xfail(f"init with unknown method should fail: {ex}")
+            pass  # f"init with unknown method should fail: {ex}"
         else:
             pytest.fail(f"init with unknown method should fail")
 
@@ -58,7 +58,7 @@ class TestThresholdSelectionParameters:
             )
         except ValueError as ex:
             if fail:
-                pytest.xfail(f"init with quantile {q} should fail: {ex}")
+                pass  # f"init with quantile {q} should fail: {ex}"
             else:
                 pytest.fail(f"init with quantile {q} should fail: {ex}")
         else:
@@ -83,12 +83,12 @@ class TestThresholdSelectionParameters:
             )
         except ValueError as ex:
             if fail:
-                pytest.xfail(f"init with {random_state=} should fail: {ex}")
+                pass  # f"init with {random_state=} should fail: {ex}"
             else:
                 pytest.fail(f"init with {random_state=} should fail: {ex}")
         else:
             if fail:
-                pytest.fail(f"init with {random_state=} should fail: {ex}")
+                pytest.fail(f"init with {random_state=} should fail")
 
     @pytest.mark.parametrize(
         "n_thresholds,fail",
@@ -112,7 +112,7 @@ class TestThresholdSelectionParameters:
             )
         except ValueError as ex:
             if fail:
-                pytest.xfail(f"init with {n_thresholds=} should fail: {ex}")
+                pass  # f"init with {n_thresholds=} should fail: {ex}"
             else:
                 pytest.fail(f"init with {n_thresholds=} should fail: {ex}")
         else:
@@ -179,7 +179,7 @@ class TestTreeGrowthParameters:
             )
         except ValueError as ex:
             if fail:
-                pytest.xfail(f"init with {frac_subsamples=} should fail: {ex}")
+                pass  # f"init with {frac_subsamples=} should fail: {ex}"
             else:
                 pytest.fail(f"init with {frac_subsamples=} should fail: {ex}")
         else:
@@ -204,12 +204,12 @@ class TestTreeGrowthParameters:
             )
         except ValueError as ex:
             if fail:
-                pytest.xfail(f"init with {frac_features=} should fail: {ex}")
+                pass  # f"init with {frac_features=} should fail: {ex}"
             else:
                 pytest.fail(f"init with {frac_features=} should fail: {ex}")
         else:
             if fail:
-                pytest.fail(f"init with {frac_features=} should fail: {ex}")
+                pytest.fail(f"init with {frac_features=} should fail")
 
     def test_fail_if_max_depth_missing(self):
         with pytest.raises(ValidationError):

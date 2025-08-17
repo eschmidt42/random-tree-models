@@ -15,16 +15,12 @@ class TestExtraTreesTemplate:
         assert not hasattr(self.model, "trees_")
 
     def test_fit(self):
-        try:
+        with pytest.raises(NotImplementedError):
             self.model.fit(None, None)  # type: ignore
-        except NotImplementedError as ex:
-            pytest.xfail("ExtraTreesTemplate.fit expectedly refused call")
 
     def test_predict(self):
-        try:
+        with pytest.raises(NotImplementedError):
             self.model.predict(None)  # type: ignore
-        except NotImplementedError as ex:
-            pytest.xfail("ExtraTreesTemplate.predict expectedly refused call")
 
 
 class TestExtraTreesRegressor:

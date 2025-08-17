@@ -24,7 +24,7 @@ def test_check_y_and_target_groups(y, target_groups, is_bad):
         scoring.check_y_and_target_groups(y, target_groups=target_groups)
     except ValueError as ex:
         if is_bad:
-            pytest.xfail("y and target_groups properly failed")
+            pass  # y and target_groups properly failed
         else:
             raise ex
     else:
@@ -51,7 +51,7 @@ def test_calc_variance(y: np.ndarray, target_groups: np.ndarray, variance_exp: f
         variance = scoring.calc_variance(y, target_groups)
     except ValueError as ex:
         if variance_exp is None:
-            pytest.xfail("Properly raised error calculating the variance")
+            pass  # "Properly raised error calculating the variance"
         else:
             raise ex
     else:
@@ -74,7 +74,7 @@ def test_entropy(y: np.ndarray):
         h = scoring.entropy(y)
     except ValueError as ex:
         if len(y) == 0:
-            pytest.xfail("entropy properly failed because of empty y")
+            pass  # entropy properly failed because of empty y
         else:
             raise ex
     else:
@@ -98,7 +98,7 @@ def test_entropy_rs(y: np.ndarray):
         h = rs_entropy(y.tolist())
     except ValueError as ex:
         if len(y) == 0:
-            pytest.xfail("entropy properly failed because of empty y")
+            pass  # entropy properly failed because of empty y
         else:
             raise ex
     else:
@@ -127,7 +127,7 @@ def test_calc_entropy(y: np.ndarray, target_groups: np.ndarray, h_exp: float):
         h = scoring.calc_entropy(y, target_groups)
     except ValueError as ex:
         if h_exp is None:
-            pytest.xfail("Properly raised error calculating the entropy")
+            pass  # Properly raised error calculating the entropy
         else:
             raise ex
     else:
@@ -155,7 +155,7 @@ def test_calc_entropy_rs(y: np.ndarray, target_groups: np.ndarray, h_exp: float)
         h = scoring.calc_entropy_rs(y, target_groups)
     except ValueError as ex:
         if h_exp is None:
-            pytest.xfail("Properly raised error calculating the entropy")
+            pass  # Properly raised error calculating the entropy
         else:
             raise ex
     else:
@@ -178,7 +178,7 @@ def test_gini_impurity(y: np.ndarray):
         g = scoring.gini_impurity(y)
     except ValueError as ex:
         if len(y) == 0:
-            pytest.xfail("gini_impurity properly failed because of empty y")
+            pass  # gini_impurity properly failed because of empty y
         else:
             raise ex
     else:
@@ -202,7 +202,7 @@ def test_gini_impurity_rs(y: np.ndarray):
         g = rs_gini_impurity(y.tolist())
     except ValueError as ex:
         if len(y) == 0:
-            pytest.xfail("gini_impurity properly failed because of empty y")
+            pass  # gini_impurity properly failed because of empty y
         else:
             raise ex
     else:
@@ -245,7 +245,7 @@ def test_calc_gini_impurity(y: np.ndarray, target_groups: np.ndarray, g_exp: flo
         g = scoring.calc_gini_impurity(y, target_groups)
     except ValueError as ex:
         if g_exp is None:
-            pytest.xfail("Properly raised error calculating the gini impurity")
+            pass  # Properly raised error calculating the gini impurity
         else:
             raise ex
     else:
@@ -273,7 +273,7 @@ def test_calc_gini_impurity_rs(y: np.ndarray, target_groups: np.ndarray, g_exp: 
         g = scoring.calc_gini_impurity_rs(y, target_groups)
     except ValueError as ex:
         if g_exp is None:
-            pytest.xfail("Properly raised error calculating the gini impurity")
+            pass  # Properly raised error calculating the gini impurity
         else:
             raise ex
     else:
@@ -299,7 +299,7 @@ def test_xgboost_split_score(g: np.ndarray, h: np.ndarray, is_bad: bool):
         score = scoring.xgboost_split_score(g, h, growth_params)
     except ValueError as ex:
         if is_bad:
-            pytest.xfail("xgboost_split_score properly failed because of empty g or h")
+            pass  # xgboost_split_score properly failed because of empty g or h
         else:
             raise ex
     else:
@@ -355,7 +355,7 @@ def test_calc_xgboost_split_score(
         score = scoring.calc_xgboost_split_score(target_groups, g, h, growth_params)
     except ValueError as ex:
         if score_exp is None:
-            pytest.xfail("Properly raised error calculating the xgboost score")
+            pass  # Properly raised error calculating the xgboost score
         else:
             raise ex
     else:
