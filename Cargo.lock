@@ -136,7 +136,7 @@ dependencies = [
 
 [[package]]
 name = "random_tree_models"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "pyo3",
 ]
