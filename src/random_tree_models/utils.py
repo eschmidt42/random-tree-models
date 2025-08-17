@@ -19,3 +19,12 @@ def _get_logger(level=logging.INFO):
 
 
 logger = _get_logger()
+
+
+def bool_to_float(x: bool) -> float:
+    if x == True:
+        return 1.0
+    elif x == False:
+        return -1.0
+    else:
+        raise ValueError(f"{x=}, expected bool")
