@@ -14,7 +14,7 @@ from sklearn.utils.validation import (
 )
 
 import random_tree_models.decisiontree as dtree
-from random_tree_models.params import MetricNames
+from random_tree_models.params import MetricNames, is_greater_zero
 from random_tree_models.utils import bool_to_float
 
 
@@ -33,7 +33,7 @@ class GradientBoostedTreesTemplate(base.BaseEstimator):
         min_improvement: float = 0.0,
         ensure_all_finite: bool = True,
     ) -> None:
-        self.n_trees = n_trees
+        self.n_trees = is_greater_zero(n_trees)
         self.measure_name = measure_name
         self.max_depth = max_depth
         self.min_improvement = min_improvement
@@ -239,7 +239,6 @@ class GradientBoostedTreesClassifier(
         if len(np.unique(y)) == 1:
             raise ValueError("Cannot train with only one class present")
 
-        # self.n_features_in_ = X.shape[1]
         self.classes_, y = np.unique(y, return_inverse=True)
         self.trees_: T.List[dtree.DecisionTreeRegressor] = []
         self.gammas_ = []
