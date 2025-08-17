@@ -1,4 +1,4 @@
-from random_tree_models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.node import Node
 
 # first value in each tuple is the value to test and the second is the flag indicating if this should work
 BOOL_OPTIONS_NONE_OKAY = [(False, True), (True, True), ("blub", False)]

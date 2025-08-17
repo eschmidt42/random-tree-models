@@ -3,12 +3,12 @@ import pytest
 from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.params
-from random_tree_models.decisiontree import (
+from random_tree_models.models.decisiontree import (
     DecisionTreeClassifier,
     DecisionTreeRegressor,
 )
-from random_tree_models.decisiontree.estimators import DecisionTreeTemplate
-from random_tree_models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.estimators import DecisionTreeTemplate
+from random_tree_models.models.decisiontree.node import Node
 from random_tree_models.params import MetricNames
 from tests.conftest import expected_failed_checks
 

@@ -1,8 +1,11 @@
 import numpy as np
 import pytest
 
-from random_tree_models.decisiontree.node import Node
-from random_tree_models.decisiontree.predict import find_leaf_node, predict_with_tree
+from random_tree_models.models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.predict import (
+    find_leaf_node,
+    predict_with_tree,
+)
 
 
 @pytest.mark.parametrize(

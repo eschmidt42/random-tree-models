@@ -9,7 +9,7 @@ from sklearn.utils.validation import (
     validate_data,  # type: ignore
 )
 
-from random_tree_models.decisiontree import (
+from random_tree_models.models.decisiontree import (
     DecisionTreeClassifier,
     DecisionTreeRegressor,
 )

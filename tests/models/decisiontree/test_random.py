@@ -1,6 +1,6 @@
 import numpy as np
 
-from random_tree_models.decisiontree.random import (
+from random_tree_models.models.decisiontree.random import (
     get_random_feature_ids,
     get_random_sample_ids,
 )

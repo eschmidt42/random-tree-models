@@ -2,17 +2,15 @@ import numpy as np
 import pytest
 from sklearn.utils.estimator_checks import parametrize_with_checks
 
-import random_tree_models.extratrees as et
-from random_tree_models.decisiontree import (
-    DecisionTreeClassifier,
+import random_tree_models.models.gradientboostedtrees as gbt
+from random_tree_models.models.decisiontree import (
     DecisionTreeRegressor,
 )
-from random_tree_models.params import MetricNames
 from tests.conftest import expected_failed_checks
 
 
-class TestExtraTreesTemplate:
-    model = et.ExtraTreesTemplate(measure_name=MetricNames.gini)
+class TestGradientBoostedTreesTemplate:
+    model = gbt.GradientBoostedTreesTemplate()
 
     def test_tree_(self):
         assert not hasattr(self.model, "trees_")
@@ -26,7 +24,7 @@ class TestExtraTreesTemplate:
             self.model.predict(None)  # type: ignore
 
 
-class TestExtraTreesRegressor:
+class TestGradientBoostedTreesRegressor:
     X = np.array(
         [
             [-1, -1],
@@ -38,19 +36,19 @@ class TestExtraTreesRegressor:
     y = np.array([0.0, 0.0, 1.0, 1.0])
 
     def test_fit(self):
-        model = et.ExtraTreesRegressor()
+        model = gbt.GradientBoostedTreesRegressor()
         model.fit(self.X, self.y)
         assert all([isinstance(model, DecisionTreeRegressor) for model in model.trees_])
 
     def test_predict(self):
-        model = et.ExtraTreesRegressor()
+        model = gbt.GradientBoostedTreesRegressor()
         model.fit(self.X, self.y)
         predictions = model.predict(self.X)
         assert np.allclose(predictions, self.y)
 
 
-class TestXGBoostClassifier:
-    model = et.ExtraTreesClassifier()
+class TestGradientBoostedTreesClassifier:
+    model = gbt.GradientBoostedTreesClassifier()
 
     X = np.array(
         [
@@ -66,25 +64,23 @@ class TestXGBoostClassifier:
         assert not hasattr(self.model, "classes_")
 
     def test_fit(self):
-        model = et.ExtraTreesClassifier()
+        model = gbt.GradientBoostedTreesClassifier()
         model.fit(self.X, self.y)
         assert not hasattr(self.model, "classes_")
-        assert all(
-            [isinstance(model, DecisionTreeClassifier) for model in model.trees_]
-        )
+        assert all([isinstance(model, DecisionTreeRegressor) for model in model.trees_])
 
     def test_predict(self):
-        model = et.ExtraTreesClassifier()
+        model = gbt.GradientBoostedTreesClassifier()
         model.fit(self.X, self.y)
         predictions = model.predict(self.X)
         assert (predictions == self.y).all()
 
 
 @parametrize_with_checks(
-    [et.ExtraTreesRegressor(), et.ExtraTreesClassifier()],
+    [gbt.GradientBoostedTreesRegressor(), gbt.GradientBoostedTreesClassifier()],
     expected_failed_checks=expected_failed_checks,  # type: ignore
 )
-def test_extratrees_estimators_with_sklearn_checks(estimator, check):
+def test_gbt_estimators_with_sklearn_checks(estimator, check):
     """Test of estimators using scikit-learn test suite
 
     Reference: https://scikit-learn.org/stable/modules/generated/sklearn.utils.estimator_checks.parametrize_with_checks.html#sklearn.utils.estimator_checks.parametrize_with_checks

@@ -9,8 +9,11 @@ from sklearn.utils.validation import (
     validate_data,  # type: ignore
 )
 
-import random_tree_models.decisiontree as dtree
 import random_tree_models.params as utils
+from random_tree_models.models.decisiontree import (
+    DecisionTreeClassifier,
+    DecisionTreeRegressor,
+)
 from random_tree_models.params import MetricNames
 
 
@@ -103,11 +106,11 @@ class ExtraTreesRegressor(base.RegressorMixin, ExtraTreesTemplate):
     def fit(self, X: np.ndarray, y: np.ndarray) -> "ExtraTreesRegressor":
         X, y = validate_data(self, X, y, ensure_all_finite=False)
 
-        self.trees_: T.List[dtree.DecisionTreeRegressor] = []
+        self.trees_: list[DecisionTreeRegressor] = []
         rng = np.random.RandomState(self.random_state)
         for _ in track(range(self.n_trees), total=self.n_trees, description="tree"):
             # train decision tree to predict differences
-            new_tree = dtree.DecisionTreeRegressor(
+            new_tree = DecisionTreeRegressor(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
@@ -199,11 +202,11 @@ class ExtraTreesClassifier(base.ClassifierMixin, ExtraTreesTemplate):
             raise ValueError("Cannot train with only one class present")
 
         self.classes_, y = np.unique(y, return_inverse=True)
-        self.trees_: T.List[dtree.DecisionTreeClassifier] = []
+        self.trees_: list[DecisionTreeClassifier] = []
 
         rng = np.random.RandomState(self.random_state)
         for _ in track(range(self.n_trees), description="tree", total=self.n_trees):
-            new_tree = dtree.DecisionTreeClassifier(
+            new_tree = DecisionTreeClassifier(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,

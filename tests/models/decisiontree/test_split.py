@@ -5,8 +5,8 @@ import pytest
 from pydantic import ValidationError
 from scipy import stats
 
-from random_tree_models.decisiontree.node import Node
-from random_tree_models.decisiontree.split import (
+from random_tree_models.models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.split import (
     BestSplit,
     check_if_split_sensible,
     find_best_split,
@@ -15,7 +15,7 @@ from random_tree_models.decisiontree.split import (
     select_arrays_for_child_node,
     select_thresholds,
 )
-from random_tree_models.decisiontree.split_objects import SplitScore
+from random_tree_models.models.decisiontree.split_objects import SplitScore
 from random_tree_models.params import (
     ColumnSelectionMethod,
     ColumnSelectionParameters,

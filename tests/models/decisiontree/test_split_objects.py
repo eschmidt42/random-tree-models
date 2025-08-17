@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from random_tree_models.decisiontree.split_objects import SplitScore
+from random_tree_models.models.decisiontree.split_objects import SplitScore
 
 from .conftest import FLOAT_OPTIONS_NONE_OKAY, STR_OPTIONS_NONE_NOT_OKAY
 

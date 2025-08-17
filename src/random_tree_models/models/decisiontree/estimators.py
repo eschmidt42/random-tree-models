@@ -6,13 +6,13 @@ from sklearn.utils import ClassifierTags  # type: ignore
 from sklearn.utils.multiclass import check_classification_targets, type_of_target
 from sklearn.utils.validation import check_is_fitted, validate_data  # type: ignore
 
-from random_tree_models.decisiontree.node import Node
-from random_tree_models.decisiontree.predict import predict_with_tree
-from random_tree_models.decisiontree.random import (
+from random_tree_models.models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.predict import predict_with_tree
+from random_tree_models.models.decisiontree.random import (
     get_random_feature_ids,
     get_random_sample_ids,
 )
-from random_tree_models.decisiontree.train import grow_tree
+from random_tree_models.models.decisiontree.train import grow_tree
 from random_tree_models.params import (
     ColumnSelectionMethod,
     ColumnSelectionParameters,

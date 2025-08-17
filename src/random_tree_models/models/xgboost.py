@@ -26,7 +26,7 @@ from sklearn.utils.validation import (
     validate_data,  # type: ignore
 )
 
-import random_tree_models.decisiontree as dtree
+from random_tree_models.models.decisiontree import DecisionTreeRegressor
 from random_tree_models.params import MetricNames, is_greater_zero
 from random_tree_models.utils import vectorize_bool_to_float
 
@@ -146,7 +146,7 @@ class XGBoostRegressor(base.RegressorMixin, XGBoostTemplate):
     def fit(self, X: np.ndarray, y: np.ndarray) -> "XGBoostRegressor":
         X, y = validate_data(self, X, y, ensure_all_finite=False)
 
-        self.trees_: T.List[dtree.DecisionTreeRegressor] = []
+        self.trees_: list[DecisionTreeRegressor] = []
 
         self.start_estimate_: float = float(np.mean(y))
 
@@ -161,7 +161,7 @@ class XGBoostRegressor(base.RegressorMixin, XGBoostTemplate):
 
         for _ in track(range(self.n_trees), total=self.n_trees, description="tree"):
             # train decision tree to predict differences
-            new_tree = dtree.DecisionTreeRegressor(
+            new_tree = DecisionTreeRegressor(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
@@ -261,7 +261,7 @@ class XGBoostClassifier(base.ClassifierMixin, XGBoostTemplate):
             raise ValueError("Cannot train with only one class present")
 
         self.classes_, y = np.unique(y, return_inverse=True)
-        self.trees_: T.List[dtree.DecisionTreeRegressor] = []
+        self.trees_: list[DecisionTreeRegressor] = []
         self.gammas_ = []
         self.all_x_bin_edges_ = []
 
@@ -283,7 +283,7 @@ class XGBoostClassifier(base.ClassifierMixin, XGBoostTemplate):
             else:
                 _X = X
 
-            new_tree = dtree.DecisionTreeRegressor(
+            new_tree = DecisionTreeRegressor(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
