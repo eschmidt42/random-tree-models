@@ -55,6 +55,7 @@ class DecisionTreeTemplate(base.BaseEstimator):
         random_state: int = 42,
         ensure_all_finite: bool = True,
     ) -> None:
+        # scikit-learn requires we store parameters like this below, instead of directly assigning TreeGrowthParameters
         self.max_depth = max_depth
         self.measure_name = measure_name
         self.min_improvement = min_improvement
@@ -70,34 +71,42 @@ class DecisionTreeTemplate(base.BaseEstimator):
         self.ensure_all_finite = ensure_all_finite
 
     def _organize_growth_parameters(self):
+        lam = -abs(self.lam)  # doing this for probably a good reason
+
+        threshold_params = ThresholdSelectionParameters(
+            method=self.threshold_method,
+            quantile=self.threshold_quantile,
+            n_thresholds=self.n_thresholds,
+            random_state=self.random_state,
+        )
+
+        column_params = ColumnSelectionParameters(
+            method=self.column_method,
+            n_trials=self.n_columns_to_try,
+        )
+
         self.growth_params_ = TreeGrowthParameters(
             max_depth=self.max_depth,
             min_improvement=self.min_improvement,
-            lam=-abs(self.lam),
-            frac_subsamples=float(self.frac_subsamples),
-            frac_features=float(self.frac_features),
-            random_state=int(self.random_state),
-            threshold_params=ThresholdSelectionParameters(
-                method=self.threshold_method,
-                quantile=self.threshold_quantile,
-                n_thresholds=self.n_thresholds,
-                random_state=int(self.random_state),
-            ),
-            column_params=ColumnSelectionParameters(
-                method=self.column_method,
-                n_trials=self.n_columns_to_try,
-            ),
+            lam=lam,
+            frac_subsamples=self.frac_subsamples,
+            frac_features=self.frac_features,
+            random_state=self.random_state,
+            threshold_params=threshold_params,
+            column_params=column_params,
         )
 
     def _select_samples_and_features(
         self, X: np.ndarray, y: np.ndarray
     ) -> T.Tuple[np.ndarray, np.ndarray, np.ndarray]:
         "Sub-samples rows and columns from X and y"
+
         if not hasattr(self, "growth_params_"):
             raise ValueError(f"Try calling `fit` first.")
 
         ix = np.arange(len(X))
         rng = np.random.RandomState(self.growth_params_.random_state)
+
         if self.growth_params_.frac_subsamples < 1.0:
             n_samples = int(self.growth_params_.frac_subsamples * len(X))
             ix_samples = rng.choice(ix, size=n_samples, replace=False)
