@@ -5,11 +5,17 @@ import sklearn.base as base
 from sklearn.utils.multiclass import check_classification_targets, type_of_target
 from sklearn.utils.validation import check_is_fitted, validate_data  # type: ignore
 
-import random_tree_models.params
 from random_tree_models.decisiontree.node import Node
 from random_tree_models.decisiontree.predict import predict_with_tree
 from random_tree_models.decisiontree.train import grow_tree
-from random_tree_models.params import MetricNames
+from random_tree_models.params import (
+    ColumnSelectionMethod,
+    ColumnSelectionParameters,
+    MetricNames,
+    ThresholdSelectionMethod,
+    ThresholdSelectionParameters,
+    TreeGrowthParameters,
+)
 
 
 class DecisionTreeTemplate(base.BaseEstimator):
@@ -19,32 +25,32 @@ class DecisionTreeTemplate(base.BaseEstimator):
     """
 
     max_depth: int
-    measure_name: random_tree_models.params.MetricNames
+    measure_name: MetricNames
     min_improvement: float
     lam: float
     frac_subsamples: float
     frac_features: float
     random_state: int
-    threshold_method: random_tree_models.params.ThresholdSelectionMethod
+    threshold_method: ThresholdSelectionMethod
     threshold_quantile: float
     n_thresholds: int
-    column_method: random_tree_models.params.ColumnSelectionMethod
+    column_method: ColumnSelectionMethod
     n_columns_to_try: int | None
     ensure_all_finite: bool
     tree_: Node
 
     def __init__(
         self,
-        measure_name: random_tree_models.params.MetricNames,
+        measure_name: MetricNames,
         max_depth: int = 2,
         min_improvement: float = 0.0,
         lam: float = 0.0,
         frac_subsamples: float = 1.0,
         frac_features: float = 1.0,
-        threshold_method: random_tree_models.params.ThresholdSelectionMethod = random_tree_models.params.ThresholdSelectionMethod.bruteforce,
+        threshold_method: ThresholdSelectionMethod = ThresholdSelectionMethod.bruteforce,
         threshold_quantile: float = 0.1,
         n_thresholds: int = 100,
-        column_method: random_tree_models.params.ColumnSelectionMethod = random_tree_models.params.ColumnSelectionMethod.ascending,
+        column_method: ColumnSelectionMethod = ColumnSelectionMethod.ascending,
         n_columns_to_try: int | None = None,
         random_state: int = 42,
         ensure_all_finite: bool = True,
@@ -64,20 +70,20 @@ class DecisionTreeTemplate(base.BaseEstimator):
         self.ensure_all_finite = ensure_all_finite
 
     def _organize_growth_parameters(self):
-        self.growth_params_ = random_tree_models.params.TreeGrowthParameters(
+        self.growth_params_ = TreeGrowthParameters(
             max_depth=self.max_depth,
             min_improvement=self.min_improvement,
             lam=-abs(self.lam),
             frac_subsamples=float(self.frac_subsamples),
             frac_features=float(self.frac_features),
             random_state=int(self.random_state),
-            threshold_params=random_tree_models.params.ThresholdSelectionParameters(
+            threshold_params=ThresholdSelectionParameters(
                 method=self.threshold_method,
                 quantile=self.threshold_quantile,
                 n_thresholds=self.n_thresholds,
                 random_state=int(self.random_state),
             ),
-            column_params=random_tree_models.params.ColumnSelectionParameters(
+            column_params=ColumnSelectionParameters(
                 method=self.column_method,
                 n_trials=self.n_columns_to_try,
             ),
@@ -142,10 +148,10 @@ class DecisionTreeRegressor(base.RegressorMixin, DecisionTreeTemplate):
         lam: float = 0.0,
         frac_subsamples: float = 1.0,
         frac_features: float = 1.0,
-        threshold_method: random_tree_models.params.ThresholdSelectionMethod = random_tree_models.params.ThresholdSelectionMethod.bruteforce,
+        threshold_method: ThresholdSelectionMethod = ThresholdSelectionMethod.bruteforce,
         threshold_quantile: float = 0.1,
         n_thresholds: int = 100,
-        column_method: random_tree_models.params.ColumnSelectionMethod = random_tree_models.params.ColumnSelectionMethod.ascending,
+        column_method: ColumnSelectionMethod = ColumnSelectionMethod.ascending,
         n_columns_to_try: int | None = None,
         random_state: int = 42,
         ensure_all_finite: bool = True,
@@ -215,10 +221,10 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
         lam: float = 0.0,
         frac_subsamples: float = 1.0,
         frac_features: float = 1.0,
-        threshold_method: random_tree_models.params.ThresholdSelectionMethod = random_tree_models.params.ThresholdSelectionMethod.bruteforce,
+        threshold_method: ThresholdSelectionMethod = ThresholdSelectionMethod.bruteforce,
         threshold_quantile: float = 0.1,
         n_thresholds: int = 100,
-        column_method: random_tree_models.params.ColumnSelectionMethod = random_tree_models.params.ColumnSelectionMethod.ascending,
+        column_method: ColumnSelectionMethod = ColumnSelectionMethod.ascending,
         n_columns_to_try: int | None = None,
         random_state: int = 42,
         ensure_all_finite: bool = True,

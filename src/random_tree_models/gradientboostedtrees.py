@@ -15,6 +15,7 @@ from sklearn.utils.validation import (
 
 import random_tree_models.decisiontree as dtree
 from random_tree_models.params import MetricNames
+from random_tree_models.utils import bool_to_float
 
 
 class GradientBoostedTreesTemplate(base.BaseEstimator):
@@ -132,15 +133,6 @@ class GradientBoostedTreesRegressor(
             y += dy
 
         return y
-
-
-def bool_to_float(x: bool) -> float:
-    if x == True:
-        return 1.0
-    elif x == False:
-        return -1.0
-    else:
-        raise ValueError(f"{x=}, expected bool")
 
 
 class GradientBoostedTreesClassifier(

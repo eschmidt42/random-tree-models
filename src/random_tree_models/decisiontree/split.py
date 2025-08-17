@@ -2,15 +2,22 @@ import typing as T
 
 import numpy as np
 
-import random_tree_models.params
 import random_tree_models.scoring as scoring
 from random_tree_models.decisiontree.node import Node
 from random_tree_models.decisiontree.split_objects import BestSplit
+from random_tree_models.params import (
+    ColumnSelectionMethod,
+    ColumnSelectionParameters,
+    MetricNames,
+    ThresholdSelectionMethod,
+    ThresholdSelectionParameters,
+    TreeGrowthParameters,
+)
 
 
 def select_thresholds(
     feature_values: np.ndarray,
-    threshold_params: random_tree_models.params.ThresholdSelectionParameters,
+    threshold_params: ThresholdSelectionParameters,
     rng: np.random.RandomState,
 ) -> np.ndarray:
     "Selects thresholds to use for splitting"
@@ -19,9 +26,9 @@ def select_thresholds(
     n_thresholds = threshold_params.n_thresholds
     num_quantile_steps = threshold_params.num_quantile_steps
 
-    if method == random_tree_models.params.ThresholdSelectionMethod.bruteforce:
+    if method == ThresholdSelectionMethod.bruteforce:
         return feature_values[1:]
-    elif method == random_tree_models.params.ThresholdSelectionMethod.random:
+    elif method == ThresholdSelectionMethod.random:
         if len(feature_values) - 1 <= n_thresholds:
             return feature_values[1:]
         else:
@@ -30,10 +37,10 @@ def select_thresholds(
                 size=(n_thresholds,),
                 replace=False,
             )
-    elif method == random_tree_models.params.ThresholdSelectionMethod.quantile:
+    elif method == ThresholdSelectionMethod.quantile:
         qs = np.linspace(0, 1, num_quantile_steps)
         return np.quantile(feature_values[1:], qs)
-    elif method == random_tree_models.params.ThresholdSelectionMethod.uniform:
+    elif method == ThresholdSelectionMethod.uniform:
         x = np.linspace(
             feature_values.min(),
             feature_values.max(),
@@ -46,7 +53,7 @@ def select_thresholds(
 
 def get_thresholds_and_target_groups(
     feature_values: np.ndarray,
-    threshold_params: random_tree_models.params.ThresholdSelectionParameters,
+    threshold_params: ThresholdSelectionParameters,
     rng: np.random.RandomState,
 ) -> T.Generator[T.Tuple[np.ndarray, np.ndarray, bool | None], None, None]:
     "Creates a generator for split finding, returning the used threshold, the target groups and a bool indicating if the default direction is left"
@@ -77,7 +84,7 @@ def get_thresholds_and_target_groups(
 
 def get_column(
     X: np.ndarray,
-    column_params: random_tree_models.params.ColumnSelectionParameters,
+    column_params: ColumnSelectionParameters,
     rng: np.random.RandomState,
 ) -> list[int]:
     # select column order to split on
@@ -85,13 +92,13 @@ def get_column(
     n_columns_to_try = column_params.n_trials
 
     columns = list(range(X.shape[1]))
-    if method == random_tree_models.params.ColumnSelectionMethod.ascending:
+    if method == ColumnSelectionMethod.ascending:
         pass
-    elif method == random_tree_models.params.ColumnSelectionMethod.random:
+    elif method == ColumnSelectionMethod.random:
         columns = np.array(columns)
         rng.shuffle(columns)
         columns = columns.tolist()
-    elif method == random_tree_models.params.ColumnSelectionMethod.largest_delta:
+    elif method == ColumnSelectionMethod.largest_delta:
         deltas = X.max(axis=0) - X.min(axis=0)
         weights = deltas / deltas.sum()
         columns = np.array(columns)
@@ -114,8 +121,7 @@ def find_best_split(
     yhat: np.ndarray | None = None,
     g: np.ndarray | None = None,
     h: np.ndarray | None = None,
-    growth_params: random_tree_models.params.TreeGrowthParameters
-    | None = None,  # TODO: make required
+    growth_params: TreeGrowthParameters | None = None,  # TODO: make required
     rng: np.random.RandomState = np.random.RandomState(42),
 ) -> BestSplit:
     """Find the best split, detecting the "default direction" with missing data."""
@@ -141,7 +147,7 @@ def find_best_split(
             feature_values, growth_params.threshold_params, rng
         ):
             split_score = scoring.calc_split_score(
-                random_tree_models.params.MetricNames(measure_name),
+                MetricNames(measure_name),
                 y,
                 target_groups,
                 yhat=yhat,
@@ -167,7 +173,7 @@ def find_best_split(
 def check_if_split_sensible(
     best: BestSplit,
     parent_node: Node | None,
-    growth_params: random_tree_models.params.TreeGrowthParameters,
+    growth_params: TreeGrowthParameters,
 ) -> tuple[bool, float | None]:
     "Verifies if split is sensible, considering score gain and left/right group sizes"
     parent_is_none = parent_node is None

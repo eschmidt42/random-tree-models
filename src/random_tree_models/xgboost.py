@@ -27,7 +27,7 @@ from sklearn.utils.validation import (
 )
 
 import random_tree_models.decisiontree as dtree
-import random_tree_models.gradientboostedtrees as gbt
+import random_tree_models.utils as gbt
 from random_tree_models.params import MetricNames
 
 

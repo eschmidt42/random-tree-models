@@ -2,8 +2,11 @@ import numpy as np
 import pytest
 from sklearn.utils.estimator_checks import parametrize_with_checks
 
-import random_tree_models.decisiontree as dtree
 import random_tree_models.randomforest as rf
+from random_tree_models.decisiontree import (
+    DecisionTreeClassifier,
+    DecisionTreeRegressor,
+)
 from tests.conftest import expected_failed_checks
 
 
@@ -36,9 +39,7 @@ class TestRandomForestRegressor:
     def test_fit(self):
         model = rf.RandomForestRegressor()
         model.fit(self.X, self.y)
-        assert all(
-            [isinstance(model, dtree.DecisionTreeRegressor) for model in model.trees_]
-        )
+        assert all([isinstance(model, DecisionTreeRegressor) for model in model.trees_])
 
     def test_predict(self):
         model = rf.RandomForestRegressor()
@@ -68,7 +69,7 @@ class TestXGBoostClassifier:
         model.fit(self.X, self.y)
         assert not hasattr(self.model, "classes_")
         assert all(
-            [isinstance(model, dtree.DecisionTreeClassifier) for model in model.trees_]
+            [isinstance(model, DecisionTreeClassifier) for model in model.trees_]
         )
 
     def test_predict(self):
