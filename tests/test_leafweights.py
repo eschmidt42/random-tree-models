@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 import random_tree_models.leafweights as leafweights
-import random_tree_models.utils as utils
-from random_tree_models.scoring import MetricNames
+import random_tree_models.params as utils
+from random_tree_models.params import MetricNames
 
 
 def test_leaf_weight_mean():

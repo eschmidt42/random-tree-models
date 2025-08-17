@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
+import random_tree_models.params as utils
 import random_tree_models.scoring as scoring
-import random_tree_models.utils as utils
 from random_tree_models import rs_entropy, rs_gini_impurity
 
 
@@ -375,43 +375,41 @@ class TestSplitScoreMetrics:
     var_exp = -0.25
 
     def test_gini(self):
-        g = scoring.calc_split_score(
-            scoring.MetricNames.gini, self.y, self.target_groups
-        )
+        g = scoring.calc_split_score(utils.MetricNames.gini, self.y, self.target_groups)
         # g = scoring.SplitScoreMetrics["gini"](self.y, self.target_groups)
         assert g == self.g_exp
 
     def test_gini_rs(self):
         g = scoring.calc_split_score(
-            scoring.MetricNames.gini_rs, self.y, self.target_groups
+            utils.MetricNames.gini_rs, self.y, self.target_groups
         )
         # g = scoring.SplitScoreMetrics["gini_rs"](self.y, self.target_groups)
         assert g == self.g_exp
 
     def test_entropy(self):
         h = scoring.calc_split_score(
-            scoring.MetricNames.entropy, self.y, self.target_groups
+            utils.MetricNames.entropy, self.y, self.target_groups
         )
         # h = scoring.SplitScoreMetrics["entropy"](self.y, self.target_groups)
         assert h == self.h_exp
 
     def test_entropy_rs(self):
         h = scoring.calc_split_score(
-            scoring.MetricNames.entropy_rs, self.y, self.target_groups
+            utils.MetricNames.entropy_rs, self.y, self.target_groups
         )
         # h = scoring.SplitScoreMetrics["entropy_rs"](self.y, self.target_groups)
         assert h == self.h_exp
 
     def test_variance(self):
         var = scoring.calc_split_score(
-            scoring.MetricNames.variance, self.y, self.target_groups
+            utils.MetricNames.variance, self.y, self.target_groups
         )
         # var = scoring.SplitScoreMetrics["variance"](self.y, self.target_groups)
         assert var == self.var_exp
 
     def test_friedman_binary_classification(self):
         var = scoring.calc_split_score(
-            scoring.MetricNames.friedman_binary_classification,
+            utils.MetricNames.friedman_binary_classification,
             self.y,
             self.target_groups,
         )

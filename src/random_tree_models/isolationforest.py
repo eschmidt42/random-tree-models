@@ -5,14 +5,22 @@ from rich.progress import track
 from sklearn import base
 from sklearn.utils.validation import check_is_fitted, validate_data  # type: ignore
 
-import random_tree_models.decisiontree as dtree
-from random_tree_models.scoring import MetricNames
-from random_tree_models.utils import ColumnSelectionMethod, ThresholdSelectionMethod
+from random_tree_models.decisiontree import (
+    DecisionTreeTemplate,
+    find_leaf_node,
+    grow_tree,
+)
+from random_tree_models.decisiontree.node import Node
+from random_tree_models.params import (
+    ColumnSelectionMethod,
+    MetricNames,
+    ThresholdSelectionMethod,
+)
 
 
-def predict_with_isolationtree(tree: dtree.Node, X: np.ndarray) -> np.ndarray:
+def predict_with_isolationtree(tree: Node, X: np.ndarray) -> np.ndarray:
     "Traverse a previously built tree to make one prediction per row in X"
-    if not isinstance(tree, dtree.Node):
+    if not isinstance(tree, Node):
         raise ValueError(
             f"Passed `tree` needs to be an instantiation of Node, got {tree=}"
         )
@@ -20,13 +28,13 @@ def predict_with_isolationtree(tree: dtree.Node, X: np.ndarray) -> np.ndarray:
     predictions = np.zeros(X.shape[0], dtype=int)
 
     for i in range(n_obs):
-        leaf_node = dtree.find_leaf_node(tree, X[i, :])
+        leaf_node = find_leaf_node(tree, X[i, :])
         predictions[i] = leaf_node.depth
 
     return predictions
 
 
-class IsolationTree(base.OutlierMixin, dtree.DecisionTreeTemplate):
+class IsolationTree(base.OutlierMixin, DecisionTreeTemplate):
     """Isolation tree
 
     Liu et al. 2006, Isolation Forest, algorithm 2
@@ -60,7 +68,7 @@ class IsolationTree(base.OutlierMixin, dtree.DecisionTreeTemplate):
 
         _X, _y, self.ix_features_ = self._select_samples_and_features(X, dummy_y)
 
-        self.tree_ = dtree.grow_tree(
+        self.tree_ = grow_tree(
             _X,
             _y,
             measure_name=self.measure_name,

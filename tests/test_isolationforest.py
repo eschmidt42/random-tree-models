@@ -1,7 +1,7 @@
 import numpy as np
 
 import random_tree_models.isolationforest as iforest
-from random_tree_models.utils import ThresholdSelectionMethod
+from random_tree_models.params import ThresholdSelectionMethod
 
 rng = np.random.RandomState(42)
 

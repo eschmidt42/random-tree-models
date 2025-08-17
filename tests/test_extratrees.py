@@ -4,7 +4,7 @@ from sklearn.utils.estimator_checks import parametrize_with_checks
 
 import random_tree_models.decisiontree as dtree
 import random_tree_models.extratrees as et
-from random_tree_models.scoring import MetricNames
+from random_tree_models.params import MetricNames
 from tests.conftest import expected_failed_checks
 
 

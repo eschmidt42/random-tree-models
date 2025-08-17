@@ -10,8 +10,8 @@ from sklearn.utils.validation import (
 )
 
 import random_tree_models.decisiontree as dtree
-import random_tree_models.utils as utils
-from random_tree_models.scoring import MetricNames
+import random_tree_models.params as utils
+from random_tree_models.params import MetricNames
 
 
 class ExtraTreesTemplate(base.BaseEstimator):

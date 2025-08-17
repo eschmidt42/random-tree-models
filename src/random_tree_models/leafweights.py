@@ -1,8 +1,7 @@
 import numpy as np
 
-import random_tree_models.utils as utils
-from random_tree_models import scoring
-from random_tree_models.scoring import MetricNames
+import random_tree_models.params as utils
+from random_tree_models.params import MetricNames
 
 
 def leaf_weight_mean(y: np.ndarray) -> float:
@@ -32,7 +31,7 @@ def leaf_weight_xgboost(
 
 def calc_leaf_weight(
     y: np.ndarray,
-    measure_name: scoring.MetricNames,
+    measure_name: utils.MetricNames,
     growth_params: utils.TreeGrowthParameters,
     g: np.ndarray | None = None,
     h: np.ndarray | None = None,
