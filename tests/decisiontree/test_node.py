@@ -64,7 +64,7 @@ def test_Node(int_val, float_val, node_val, str_val, bool_val):
         if is_okay:
             raise ex
         else:
-            pytest.xfail("SplitScore validation failed as expected")
+            pass  # SplitScore validation failed as expected
     else:
         for att in [
             "array_column",

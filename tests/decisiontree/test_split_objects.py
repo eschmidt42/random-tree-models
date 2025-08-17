@@ -26,7 +26,7 @@ def test_SplitScore(name, value):
         if is_okay:
             raise ValueError(f"whoops {name=} {value=} failed with {ex}")
         else:
-            pytest.xfail("SplitScore validation failed as expected")
+            pass  # SplitScore validation failed as expected
     else:
         if is_bad:
             pytest.fail(
