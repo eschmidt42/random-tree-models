@@ -1,8 +1,8 @@
 from rich import print as rprint
 from rich.tree import Tree
 
-from random_tree_models.decisiontree.estimators import DecisionTreeTemplate
-from random_tree_models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.estimators import DecisionTreeTemplate
+from random_tree_models.models.decisiontree.node import Node
 
 
 def walk_tree(

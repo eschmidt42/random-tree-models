@@ -9,8 +9,11 @@ from sklearn.utils.validation import (
     validate_data,  # type: ignore
 )
 
-import random_tree_models.decisiontree as dtree
-from random_tree_models.params import MetricNames
+from random_tree_models.models.decisiontree import (
+    DecisionTreeClassifier,
+    DecisionTreeRegressor,
+)
+from random_tree_models.params import MetricNames, is_greater_zero
 
 
 class RandomForestTemplate(base.BaseEstimator):
@@ -34,7 +37,7 @@ class RandomForestTemplate(base.BaseEstimator):
         frac_features: float = 1.0,
         random_state: int = 42,
     ) -> None:
-        self.n_trees = n_trees
+        self.n_trees = is_greater_zero(n_trees)
         self.measure_name = measure_name
         self.max_depth = max_depth
         self.min_improvement = min_improvement
@@ -87,10 +90,10 @@ class RandomForestRegressor(base.RegressorMixin, RandomForestTemplate):
     def fit(self, X: np.ndarray, y: np.ndarray) -> "RandomForestRegressor":
         X, y = validate_data(self, X, y, ensure_all_finite=False)
 
-        self.trees_: T.List[dtree.DecisionTreeRegressor] = []
+        self.trees_: list[DecisionTreeRegressor] = []
         rng = np.random.RandomState(self.random_state)
         for _ in track(range(self.n_trees), total=self.n_trees, description="tree"):
-            new_tree = dtree.DecisionTreeRegressor(
+            new_tree = DecisionTreeRegressor(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
@@ -116,10 +119,13 @@ class RandomForestRegressor(base.RegressorMixin, RandomForestTemplate):
         ):
             y[:, i] = tree.predict(X)
 
-        if aggregation == "mean":
-            y = np.mean(y, axis=1)
-        elif aggregation == "median":
-            y = np.median(y, axis=1)
+        match aggregation:
+            case "mean":
+                y = np.mean(y, axis=1)
+            case "median":
+                y = np.median(y, axis=1)
+            case _:
+                raise ValueError(f"{aggregation=} expected to be 'mean' or 'median'")
 
         return y
 
@@ -181,11 +187,11 @@ class RandomForestClassifier(base.ClassifierMixin, RandomForestTemplate):
             raise ValueError("Cannot train with only one class present")
 
         self.classes_, y = np.unique(y, return_inverse=True)
-        self.trees_: T.List[dtree.DecisionTreeClassifier] = []
+        self.trees_: list[DecisionTreeClassifier] = []
 
         rng = np.random.RandomState(self.random_state)
         for _ in track(range(self.n_trees), description="tree", total=self.n_trees):
-            new_tree = dtree.DecisionTreeClassifier(
+            new_tree = DecisionTreeClassifier(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
@@ -211,12 +217,15 @@ class RandomForestClassifier(base.ClassifierMixin, RandomForestTemplate):
         ):
             proba[:, i, :] = tree.predict_proba(X)
 
-        if aggregation == "mean":
-            proba = np.mean(proba, axis=1)
-            proba = proba / np.sum(proba, axis=1)[:, np.newaxis]
-        elif aggregation == "median":
-            proba = np.median(proba, axis=1)
-            proba = proba / np.sum(proba, axis=1)[:, np.newaxis]
+        match aggregation:
+            case "mean":
+                proba = np.mean(proba, axis=1)
+                proba = proba / np.sum(proba, axis=1)[:, np.newaxis]
+            case "median":
+                proba = np.median(proba, axis=1)
+                proba = proba / np.sum(proba, axis=1)[:, np.newaxis]
+            case _:
+                raise ValueError(f"{aggregation=} expected to be 'mean' or 'median'")
 
         return proba
 

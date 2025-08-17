@@ -2,9 +2,9 @@ import pytest
 from inline_snapshot import snapshot
 from pytest import CaptureFixture
 
-from random_tree_models.decisiontree.estimators import DecisionTreeTemplate
-from random_tree_models.decisiontree.node import Node
-from random_tree_models.decisiontree.visualize import show_tree
+from random_tree_models.models.decisiontree.estimators import DecisionTreeTemplate
+from random_tree_models.models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.visualize import show_tree
 from random_tree_models.params import MetricNames
 
 

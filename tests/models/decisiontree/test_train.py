@@ -3,9 +3,9 @@ import pytest
 from dirty_equals import IsApprox
 from inline_snapshot import snapshot
 
-from random_tree_models.decisiontree.node import Node
-from random_tree_models.decisiontree.split_objects import SplitScore
-from random_tree_models.decisiontree.train import (
+from random_tree_models.models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.split_objects import SplitScore
+from random_tree_models.models.decisiontree.train import (
     calc_leaf_weight_and_split_score,
     check_is_baselevel,
     grow_tree,

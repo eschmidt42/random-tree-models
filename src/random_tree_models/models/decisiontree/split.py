@@ -3,8 +3,8 @@ import typing as T
 import numpy as np
 
 import random_tree_models.scoring as scoring
-from random_tree_models.decisiontree.node import Node
-from random_tree_models.decisiontree.split_objects import BestSplit
+from random_tree_models.models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.split_objects import BestSplit
 from random_tree_models.params import (
     ColumnSelectionMethod,
     ColumnSelectionParameters,

@@ -7,6 +7,10 @@ from random_tree_models.params import (
     ThresholdSelectionMethod,
     ThresholdSelectionParameters,
     TreeGrowthParameters,
+    is_fraction,
+    is_greater_equal_zero,
+    is_greater_zero,
+    is_quantile,
 )
 
 
@@ -214,3 +218,97 @@ class TestTreeGrowthParameters:
     def test_fail_if_max_depth_missing(self):
         with pytest.raises(ValidationError):
             _ = TreeGrowthParameters()  # type: ignore
+
+
+@pytest.mark.parametrize(
+    "q, ok",
+    [
+        (0.1, True),
+        (0.2, True),
+        (0.3, True),
+        (-0.1, False),
+        (1.1, False),
+        (0.4, False),
+        (0.51, False),
+    ],
+)
+def test_is_quantile(q: float, ok: bool):
+    try:
+        res = is_quantile(q)
+    except ValueError:
+        pass
+    else:
+        if ok:
+            assert res == q
+        else:
+            raise
+
+
+@pytest.mark.parametrize(
+    "f, ok",
+    [
+        (0.1, True),
+        (0.2, True),
+        (0.3, True),
+        (0.5, True),
+        (0.6, True),
+        (0.8, True),
+        (0.99, True),
+        (1.0, True),
+        (-0.1, False),
+        (1.1, False),
+        (0, False),
+    ],
+)
+def test_is_fraction(f: float, ok: bool):
+    try:
+        res = is_fraction(f)
+    except ValueError:
+        pass
+    else:
+        if ok:
+            assert res == f
+        else:
+            raise
+
+
+@pytest.mark.parametrize(
+    "v, ok",
+    [
+        (0.1, True),
+        (1.0, True),
+        (-0.1, False),
+        (0, False),
+    ],
+)
+def test_is_greater_zero(v: int, ok: bool):
+    try:
+        res = is_greater_zero(v)
+    except ValueError:
+        pass
+    else:
+        if ok:
+            assert res == v
+        else:
+            raise
+
+
+@pytest.mark.parametrize(
+    "v, ok",
+    [
+        (0.1, True),
+        (1.0, True),
+        (-0.1, False),
+        (0, True),
+    ],
+)
+def test_is_greater_equal_zero(v: float, ok: bool):
+    try:
+        res = is_greater_equal_zero(v)
+    except ValueError:
+        pass
+    else:
+        if ok:
+            assert res == v
+        else:
+            raise

@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 from sklearn.utils.estimator_checks import parametrize_with_checks
 
-import random_tree_models.xgboost as xgboost
-from random_tree_models.decisiontree import DecisionTreeRegressor
+import random_tree_models.models.xgboost as xgboost
+from random_tree_models.models.decisiontree import DecisionTreeRegressor
 from tests.conftest import expected_failed_checks
 
 

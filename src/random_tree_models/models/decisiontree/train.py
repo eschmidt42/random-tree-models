@@ -5,13 +5,13 @@ import numpy as np
 import random_tree_models.leafweights as leafweights
 import random_tree_models.params
 import random_tree_models.scoring as scoring
-from random_tree_models.decisiontree.node import Node
-from random_tree_models.decisiontree.split import (
+from random_tree_models.models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.split import (
     check_if_split_sensible,
     find_best_split,
     select_arrays_for_child_node,
 )
-from random_tree_models.decisiontree.split_objects import SplitScore
+from random_tree_models.models.decisiontree.split_objects import SplitScore
 from random_tree_models.params import MetricNames
 
 

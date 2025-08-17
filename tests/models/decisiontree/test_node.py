@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from random_tree_models.decisiontree.node import Node
-from random_tree_models.decisiontree.split_objects import SplitScore
+from random_tree_models.models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.split_objects import SplitScore
 
 from .conftest import (
     BOOL_OPTIONS_NONE_OKAY,

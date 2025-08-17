@@ -5,12 +5,12 @@ from rich.progress import track
 from sklearn import base
 from sklearn.utils.validation import check_is_fitted, validate_data  # type: ignore
 
-from random_tree_models.decisiontree import (
+from random_tree_models.models.decisiontree import (
     DecisionTreeTemplate,
     find_leaf_node,
     grow_tree,
 )
-from random_tree_models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.node import Node
 from random_tree_models.params import (
     ColumnSelectionMethod,
     MetricNames,

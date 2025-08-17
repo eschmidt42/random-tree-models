@@ -13,8 +13,10 @@ from sklearn.utils.validation import (
     validate_data,  # type: ignore
 )
 
-import random_tree_models.decisiontree as dtree
-from random_tree_models.params import MetricNames
+from random_tree_models.models.decisiontree import (
+    DecisionTreeRegressor,
+)
+from random_tree_models.params import MetricNames, is_greater_zero
 from random_tree_models.utils import bool_to_float
 
 
@@ -33,7 +35,7 @@ class GradientBoostedTreesTemplate(base.BaseEstimator):
         min_improvement: float = 0.0,
         ensure_all_finite: bool = True,
     ) -> None:
-        self.n_trees = n_trees
+        self.n_trees = is_greater_zero(n_trees)
         self.measure_name = measure_name
         self.max_depth = max_depth
         self.min_improvement = min_improvement
@@ -94,7 +96,7 @@ class GradientBoostedTreesRegressor(
     def fit(self, X: np.ndarray, y: np.ndarray) -> "GradientBoostedTreesRegressor":
         X, y = validate_data(self, X, y, ensure_all_finite=False)
 
-        self.trees_: T.List[dtree.DecisionTreeRegressor] = []
+        self.trees_: list[DecisionTreeRegressor] = []
 
         self.start_estimate_ = np.mean(y)
 
@@ -103,7 +105,7 @@ class GradientBoostedTreesRegressor(
 
         for _ in track(range(self.n_trees), total=self.n_trees, description="tree"):
             # train decision tree to predict differences
-            new_tree = dtree.DecisionTreeRegressor(
+            new_tree = DecisionTreeRegressor(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
@@ -239,9 +241,8 @@ class GradientBoostedTreesClassifier(
         if len(np.unique(y)) == 1:
             raise ValueError("Cannot train with only one class present")
 
-        # self.n_features_in_ = X.shape[1]
         self.classes_, y = np.unique(y, return_inverse=True)
-        self.trees_: T.List[dtree.DecisionTreeRegressor] = []
+        self.trees_: list[DecisionTreeRegressor] = []
         self.gammas_ = []
 
         y = self._bool_to_float(y)
@@ -255,7 +256,7 @@ class GradientBoostedTreesClassifier(
                 2 * y / (1 + np.exp(2 * y * yhat))
             )  # dloss/dyhat, g in the xgboost paper
 
-            new_tree = dtree.DecisionTreeRegressor(
+            new_tree = DecisionTreeRegressor(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,

@@ -1,6 +1,6 @@
 import numpy as np
 
-from random_tree_models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.node import Node
 
 
 def find_leaf_node(node: Node, x: np.ndarray) -> Node:

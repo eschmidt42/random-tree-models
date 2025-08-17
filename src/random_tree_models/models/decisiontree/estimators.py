@@ -2,12 +2,17 @@ import typing as T
 
 import numpy as np
 import sklearn.base as base
+from sklearn.utils import ClassifierTags  # type: ignore
 from sklearn.utils.multiclass import check_classification_targets, type_of_target
 from sklearn.utils.validation import check_is_fitted, validate_data  # type: ignore
 
-from random_tree_models.decisiontree.node import Node
-from random_tree_models.decisiontree.predict import predict_with_tree
-from random_tree_models.decisiontree.train import grow_tree
+from random_tree_models.models.decisiontree.node import Node
+from random_tree_models.models.decisiontree.predict import predict_with_tree
+from random_tree_models.models.decisiontree.random import (
+    get_random_feature_ids,
+    get_random_sample_ids,
+)
+from random_tree_models.models.decisiontree.train import grow_tree
 from random_tree_models.params import (
     ColumnSelectionMethod,
     ColumnSelectionParameters,
@@ -55,6 +60,7 @@ class DecisionTreeTemplate(base.BaseEstimator):
         random_state: int = 42,
         ensure_all_finite: bool = True,
     ) -> None:
+        # scikit-learn requires we store parameters like this below, instead of directly assigning TreeGrowthParameters
         self.max_depth = max_depth
         self.measure_name = measure_name
         self.min_improvement = min_improvement
@@ -70,49 +76,43 @@ class DecisionTreeTemplate(base.BaseEstimator):
         self.ensure_all_finite = ensure_all_finite
 
     def _organize_growth_parameters(self):
+        lam = -abs(self.lam)  # doing this for probably a good reason
+
+        threshold_params = ThresholdSelectionParameters(
+            method=self.threshold_method,
+            quantile=self.threshold_quantile,
+            n_thresholds=self.n_thresholds,
+            random_state=self.random_state,
+        )
+
+        column_params = ColumnSelectionParameters(
+            method=self.column_method,
+            n_trials=self.n_columns_to_try,
+        )
+
         self.growth_params_ = TreeGrowthParameters(
             max_depth=self.max_depth,
             min_improvement=self.min_improvement,
-            lam=-abs(self.lam),
-            frac_subsamples=float(self.frac_subsamples),
-            frac_features=float(self.frac_features),
-            random_state=int(self.random_state),
-            threshold_params=ThresholdSelectionParameters(
-                method=self.threshold_method,
-                quantile=self.threshold_quantile,
-                n_thresholds=self.n_thresholds,
-                random_state=int(self.random_state),
-            ),
-            column_params=ColumnSelectionParameters(
-                method=self.column_method,
-                n_trials=self.n_columns_to_try,
-            ),
+            lam=lam,
+            frac_subsamples=self.frac_subsamples,
+            frac_features=self.frac_features,
+            random_state=self.random_state,
+            threshold_params=threshold_params,
+            column_params=column_params,
         )
 
     def _select_samples_and_features(
         self, X: np.ndarray, y: np.ndarray
     ) -> T.Tuple[np.ndarray, np.ndarray, np.ndarray]:
         "Sub-samples rows and columns from X and y"
+
         if not hasattr(self, "growth_params_"):
             raise ValueError(f"Try calling `fit` first.")
 
-        ix = np.arange(len(X))
         rng = np.random.RandomState(self.growth_params_.random_state)
-        if self.growth_params_.frac_subsamples < 1.0:
-            n_samples = int(self.growth_params_.frac_subsamples * len(X))
-            ix_samples = rng.choice(ix, size=n_samples, replace=False)
-        else:
-            ix_samples = ix
 
-        if self.frac_features < 1.0:
-            n_columns = int(X.shape[1] * self.frac_features)
-            ix_features = rng.choice(
-                np.arange(X.shape[1]),
-                size=n_columns,
-                replace=False,
-            )
-        else:
-            ix_features = np.arange(X.shape[1])
+        ix_samples = get_random_sample_ids(X, rng, self.growth_params_.frac_subsamples)
+        ix_features = get_random_feature_ids(X, rng, self.growth_params_.frac_features)
 
         _X = X[ix_samples, :]
         _X = _X[:, ix_features]
@@ -245,16 +245,9 @@ class DecisionTreeClassifier(base.ClassifierMixin, DecisionTreeTemplate):
         )
         self.ensure_all_finite = ensure_all_finite
 
-    def _more_tags(self) -> T.Dict[str, bool]:
-        """Describes to scikit-learn parametrize_with_checks the scope of this class
-
-        Reference: https://scikit-learn.org/stable/developers/develop.html#estimator-tags
-        """
-        return {"binary_only": True}
-
     def __sklearn_tags__(self):
-        # https://scikit-learn.org/stable/developers/develop.html
-        tags = super().__sklearn_tags__()  # type: ignore
+        # https://scikit-learn.org/stable/developers/develop.html#estimator-tags
+        tags: ClassifierTags = super().__sklearn_tags__()  # type: ignore
         tags.classifier_tags.multi_class = False
         return tags
 

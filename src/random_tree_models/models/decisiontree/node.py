@@ -3,7 +3,7 @@ import uuid
 from pydantic import StrictInt, StrictStr
 from pydantic.dataclasses import dataclass
 
-from random_tree_models.decisiontree.split_objects import SplitScore
+from random_tree_models.models.decisiontree.split_objects import SplitScore
 
 
 @dataclass

@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 from sklearn.utils.estimator_checks import parametrize_with_checks
 
-import random_tree_models.randomforest as rf
-from random_tree_models.decisiontree import (
+import random_tree_models.models.randomforest as rf
+from random_tree_models.models.decisiontree import (
     DecisionTreeClassifier,
     DecisionTreeRegressor,
 )

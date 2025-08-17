@@ -1,5 +1,6 @@
 import logging
 
+import numpy as np
 import pytest
 
 import random_tree_models.utils
@@ -36,3 +37,17 @@ def test_bool_to_float(x, exp, is_bad: bool):
         if is_bad:
             pytest.fail(f"Passed unexpectedly for non-bool value {x} returning {res}")
         assert res == exp
+
+
+def test_vectorize_bool_to_float():
+    y = np.array([True, False, True, False])
+    res = utils.vectorize_bool_to_float(y)
+    assert np.all(res == np.array([1.0, -1.0, 1.0, -1.0]))
+
+    y = np.array([True, False, True, True])
+    res = utils.vectorize_bool_to_float(y)
+    assert np.all(res == np.array([1.0, -1.0, 1.0, 1.0]))
+
+    y = np.array([False, False, True, False])
+    res = utils.vectorize_bool_to_float(y)
+    assert np.all(res == np.array([-1.0, -1.0, 1.0, -1.0]))
