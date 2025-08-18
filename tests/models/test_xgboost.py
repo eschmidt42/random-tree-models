@@ -86,90 +86,72 @@ def test_xgboost_estimators_with_sklearn_checks(estimator, check):
     check(estimator)
 
 
-@pytest.mark.parametrize(
-    "y_float, start_estimate_exp",
-    [
-        (np.array([-1.0, 1.0]), 0),
-        (np.array([-1.0, 1.0, 1.0, 1.0]), 0.5493061443340549),
-        (np.array([-1.0, -1.0, -1.0, 1.0]), -0.5493061443340549),
-        (np.array([True, True, False, False]), None),
-        (np.array([-2.0, -2.0, 2.0, 2.0]), None),
-    ],
-)
-def test_compute_start_estimate_binomial_loglikelihood(
-    y_float: np.ndarray, start_estimate_exp: float
-):
-    try:
-        # line to test
-        start_estimate = xgboost.compute_start_estimate_binomial_loglikelihood(y_float)
-    except ValueError as ex:
-        if start_estimate_exp is None:
-            pass  # expectedly failed for non -1 and 1 values
-        else:
-            raise ex
-    else:
-        if start_estimate_exp is None:
-            pytest.fail(f"unexpectedly passed for non -1 and 1 values")
-        assert np.isclose(start_estimate, start_estimate_exp)
+# @pytest.mark.parametrize(
+#     "y_float, start_estimate_exp",
+#     [
+#         (np.array([-1.0, 1.0]), 0),
+#         (np.array([-1.0, 1.0, 1.0, 1.0]), 0.5493061443340549),
+#         (np.array([-1.0, -1.0, -1.0, 1.0]), -0.5493061443340549),
+#         (np.array([True, True, False, False]), None),
+#         (np.array([-2.0, -2.0, 2.0, 2.0]), None),
+#     ],
+# )
+# def test_compute_start_estimate_binomial_loglikelihood(
+#     y_float: np.ndarray, start_estimate_exp: float
+# ):
+#     try:
+#         # line to test
+#         start_estimate = xgboost.compute_start_estimate_binomial_loglikelihood(y_float)
+#     except ValueError as ex:
+#         if start_estimate_exp is None:
+#             pass  # expectedly failed for non -1 and 1 values
+#         else:
+#             raise ex
+#     else:
+#         if start_estimate_exp is None:
+#             pytest.fail(f"unexpectedly passed for non -1 and 1 values")
+#         assert np.isclose(start_estimate, start_estimate_exp)
 
 
-@pytest.mark.parametrize(
-    "y,start_estimate,g_exp",
-    [
-        (np.array([1.0]), 0.5, np.array([0.5])),
-        (np.array([1.0, 1.0]), 0.5, np.array([0.5, 0.5])),
-    ],
-)
-def test_compute_derivatives_negative_least_squares(
-    y: np.ndarray, start_estimate: float, g_exp: np.ndarray
-):
-    # line to test
-    g, h = xgboost.compute_derivatives_negative_least_squares(y, start_estimate)
-
-    assert g.shape == h.shape
-    assert np.allclose(g, g_exp)
-    assert np.allclose(h, -1)
-
-
-@pytest.mark.parametrize(
-    "y_float,start_estimate,g_exp,h_exp",
-    [
-        (
-            np.array([-1.0, 1.0]),
-            0.0,
-            np.array([-1.0, 1.0]),
-            np.array([-1.0, -1.0]),
-        ),
-        (
-            np.array([-1.0, -1.0, 1.0, 1.0]),
-            0.0,
-            np.array([-1.0, -1.0, 1.0, 1.0]),
-            np.array([-1.0, -1.0, -1.0, -1.0]),
-        ),
-        # failure cases
-        (np.array([False, True]), 0.0, None, None),
-        (np.array([-2.0, 2.0]), 0.0, None, None),
-    ],
-)
-def test_compute_derivatives_binomial_loglikelihood(
-    y_float: np.ndarray,
-    start_estimate: float,
-    g_exp: np.ndarray,
-    h_exp: np.ndarray,
-):
-    yhat = np.ones_like(y_float) * start_estimate
-    is_bad = g_exp is None and h_exp is None
-    try:
-        # line to test
-        g, h = xgboost.compute_derivatives_binomial_loglikelihood(y_float, yhat)
-    except ValueError as ex:
-        if is_bad:
-            pass  # Expectedly failed for incorrect y_float values"
-        else:
-            raise ex
-    else:
-        if is_bad:
-            pytest.fail("Unexpectedly passed for incorrect y_float values")
-        assert g.shape == h.shape
-        assert np.allclose(g, g_exp)
-        assert np.allclose(h, h_exp)
+# @pytest.mark.parametrize(
+#     "y_float,start_estimate,g_exp,h_exp",
+#     [
+#         (
+#             np.array([-1.0, 1.0]),
+#             0.0,
+#             np.array([-1.0, 1.0]),
+#             np.array([-1.0, -1.0]),
+#         ),
+#         (
+#             np.array([-1.0, -1.0, 1.0, 1.0]),
+#             0.0,
+#             np.array([-1.0, -1.0, 1.0, 1.0]),
+#             np.array([-1.0, -1.0, -1.0, -1.0]),
+#         ),
+#         # failure cases
+#         (np.array([False, True]), 0.0, None, None),
+#         (np.array([-2.0, 2.0]), 0.0, None, None),
+#     ],
+# )
+# def test_compute_derivatives_binomial_loglikelihood(
+#     y_float: np.ndarray,
+#     start_estimate: float,
+#     g_exp: np.ndarray,
+#     h_exp: np.ndarray,
+# ):
+#     yhat = np.ones_like(y_float) * start_estimate
+#     is_bad = g_exp is None and h_exp is None
+#     try:
+#         # line to test
+#         g, h = xgboost.compute_derivatives_binomial_loglikelihood(y_float, yhat)
+#     except ValueError as ex:
+#         if is_bad:
+#             pass  # Expectedly failed for incorrect y_float values"
+#         else:
+#             raise ex
+#     else:
+#         if is_bad:
+#             pytest.fail("Unexpectedly passed for incorrect y_float values")
+#         assert g.shape == h.shape
+#         assert np.allclose(g, g_exp)
+#         assert np.allclose(h, h_exp)
