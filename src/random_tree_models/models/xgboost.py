@@ -10,7 +10,6 @@ Key aspects:
 * sparsity-aware split finding / "default direction" for missing values
 """
 
-import math
 import typing as T
 
 import numpy as np
@@ -26,9 +25,18 @@ from sklearn.utils.validation import (
     validate_data,  # type: ignore
 )
 
+from random_tree_models.gradient import (
+    get_pseudo_residual_log_odds,
+    get_pseudo_residual_mse,
+    get_start_estimate_log_odds,
+    get_start_estimate_mse,
+)
 from random_tree_models.models.decisiontree import DecisionTreeRegressor
 from random_tree_models.params import MetricNames, is_greater_zero
-from random_tree_models.utils import vectorize_bool_to_float
+from random_tree_models.transform import (
+    get_probabilities_from_mapped_bools,
+    vectorize_bool_to_float,
+)
 
 
 class XGBoostTemplate(base.BaseEstimator):
@@ -71,15 +79,6 @@ class XGBoostTemplate(base.BaseEstimator):
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
-
-
-def compute_derivatives_negative_least_squares(
-    y: np.ndarray, start_estimate: float
-) -> T.Tuple[np.ndarray, np.ndarray]:
-    "loss = - mean |y-yhat|^2"
-    g = y - start_estimate  # 1st order derivative
-    h = -1 * np.ones_like(g)  # 2nd order derivative
-    return g, h
 
 
 # TODO: add tests:
@@ -144,14 +143,19 @@ class XGBoostRegressor(base.RegressorMixin, XGBoostTemplate):
     """
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "XGBoostRegressor":
-        X, y = validate_data(self, X, y, ensure_all_finite=False)
+        X, y = validate_data(self, X, y, ensure_all_finite=self.ensure_all_finite)
 
         self.trees_: list[DecisionTreeRegressor] = []
 
-        self.start_estimate_: float = float(np.mean(y))
+        self.start_estimate_ = get_start_estimate_mse(y)
 
         # initial differences to predict using negative squared error loss
-        g, h = compute_derivatives_negative_least_squares(y, self.start_estimate_)
+        current_estimates = self.start_estimate_ * np.ones_like(y)
+        g, h = get_pseudo_residual_mse(y, current_estimates, second_order=True)
+
+        if h is None:
+            raise ValueError(f"h cannot be None beyond this stage.")
+
         if self.use_hist:
             X_hist, all_x_bin_edges = xgboost_histogrammify_with_h(
                 X, h, n_bins=self.n_bins
@@ -179,7 +183,9 @@ class XGBoostRegressor(base.RegressorMixin, XGBoostTemplate):
     def predict(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("trees_", "n_features_in_", "start_estimate_"))
 
-        X = validate_data(self, X, reset=False, ensure_all_finite=False)
+        X = validate_data(
+            self, X, reset=False, ensure_all_finite=self.ensure_all_finite
+        )
 
         # baseline estimate
         y = np.ones(X.shape[0]) * self.start_estimate_
@@ -197,41 +203,6 @@ class XGBoostRegressor(base.RegressorMixin, XGBoostTemplate):
         return y
 
 
-def check_y_float(y_float: np.ndarray):
-    # expects y_float to consist only of the values -1 and 1
-    unexpected_values = np.abs(y_float) != 1
-    if np.sum(unexpected_values) > 0:
-        raise ValueError(
-            f"expected y_float to contain only -1 and 1, got {y_float[unexpected_values]}"
-        )
-
-
-def compute_start_estimate_binomial_loglikelihood(y_float: np.ndarray) -> float:
-    check_y_float(y_float)
-
-    ym = np.mean(y_float)
-    start_estimate = 0.5 * math.log((1 + ym) / (1 - ym))
-
-    return start_estimate
-
-
-def compute_derivatives_binomial_loglikelihood(
-    y_float: np.ndarray, yhat: np.ndarray
-) -> T.Tuple[np.ndarray, np.ndarray]:
-    "loss = - sum log(1+exp(2*y*yhat))"
-
-    check_y_float(y_float)
-
-    # differences to predict using binomial log-likelihood (yes, the negative of the negative :P)
-    exp_y_yhat = np.exp(2 * y_float * yhat)
-    g = 2 * y_float / (1 + exp_y_yhat)  # dloss/dyhat, g in the xgboost paper
-
-    # d^2loss/dyhat^2, h in the xgboost paper
-    h = -(4 * y_float**2 * exp_y_yhat / (1 + exp_y_yhat) ** 2)
-
-    return g, h
-
-
 class XGBoostClassifier(base.ClassifierMixin, XGBoostTemplate):
     """XGBoost classifier
 
@@ -246,7 +217,7 @@ class XGBoostClassifier(base.ClassifierMixin, XGBoostTemplate):
         return tags
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "XGBoostClassifier":
-        X, y = validate_data(self, X, y, ensure_all_finite=False)
+        X, y = validate_data(self, X, y, ensure_all_finite=self.ensure_all_finite)
 
         check_classification_targets(y)
 
@@ -269,11 +240,16 @@ class XGBoostClassifier(base.ClassifierMixin, XGBoostTemplate):
         y = vectorize_bool_to_float(y)
 
         # initial estimate
-        self.start_estimate_ = compute_start_estimate_binomial_loglikelihood(y)
-        yhat = np.ones_like(y) * self.start_estimate_
+        self.start_estimate_ = get_start_estimate_log_odds(y)
+        current_estimates = np.ones_like(y) * self.start_estimate_
 
         for _ in track(range(self.n_trees), description="tree", total=self.n_trees):
-            g, h = compute_derivatives_binomial_loglikelihood(y, yhat)
+            g, h = get_pseudo_residual_log_odds(
+                y, current_estimates, second_order=True
+            )  # compute_derivatives_binomial_loglikelihood(y, yhat)
+
+            if h is None:
+                raise ValueError(f"h cannot be None beyond this stage.")
 
             if self.use_hist:
                 _X, all_x_bin_edges = xgboost_histogrammify_with_h(
@@ -293,16 +269,17 @@ class XGBoostClassifier(base.ClassifierMixin, XGBoostTemplate):
             new_tree.fit(_X, y, g=g, h=h)
             self.trees_.append(new_tree)
 
-            # update _y
-            yhat += new_tree.predict(X)
+            current_estimates += new_tree.predict(X)
 
         return self
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("trees_", "classes_", "gammas_", "n_features_in_"))
-        X = validate_data(self, X, reset=False, ensure_all_finite=False)
+        X = validate_data(
+            self, X, reset=False, ensure_all_finite=self.ensure_all_finite
+        )
 
-        g = np.ones(X.shape[0]) * self.start_estimate_
+        h = np.ones(X.shape[0]) * self.start_estimate_
 
         for boost, tree in track(
             enumerate(self.trees_), description="tree", total=len(self.trees_)
@@ -314,16 +291,15 @@ class XGBoostClassifier(base.ClassifierMixin, XGBoostTemplate):
             else:
                 _X = X
 
-            g += tree.predict(_X)
+            h += tree.predict(_X)
 
-        proba = 1 / (1 + np.exp(-2.0 * g))
-        proba = np.array([1 - proba, proba]).T
-        return proba
+        p = get_probabilities_from_mapped_bools(h)
+        return p
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        proba = self.predict_proba(X)
+        p = self.predict_proba(X)
 
-        ix = np.argmax(proba, axis=1)
+        ix = np.argmax(p, axis=1)
         y = self.classes_[ix]
 
         return y

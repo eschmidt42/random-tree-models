@@ -1,4 +1,3 @@
-import math
 import typing as T
 
 import numpy as np
@@ -14,11 +13,20 @@ from sklearn.utils.validation import (
     validate_data,  # type: ignore
 )
 
+from random_tree_models.gradient import (
+    get_pseudo_residual_log_odds,
+    get_pseudo_residual_mse,
+    get_start_estimate_log_odds,
+    get_start_estimate_mse,
+)
 from random_tree_models.models.decisiontree import (
     DecisionTreeRegressor,
 )
 from random_tree_models.params import MetricNames, is_greater_zero
-from random_tree_models.utils import vectorize_bool_to_float
+from random_tree_models.transform import (
+    get_probabilities_from_mapped_bools,
+    vectorize_bool_to_float,
+)
 
 
 class GradientBoostedTreesTemplate(base.BaseEstimator):
@@ -54,42 +62,6 @@ class GradientBoostedTreesTemplate(base.BaseEstimator):
         raise NotImplementedError()
 
 
-def get_pseudo_residual_mse(y: np.ndarray, current_estimates: np.ndarray) -> np.ndarray:
-    """
-    mse loss = sum_i (y_i - estimate_i)^2
-    pseudo residual_i = d mse loss(y,estimate) / d estimate_i = - (y_i - estimate_i)
-    since we want to apply it as the negative gradient for steepest descent we flip the sign
-    """
-    return y - current_estimates
-
-
-def get_pseudo_residual_log_odds(
-    y: np.ndarray, current_estimates: np.ndarray
-) -> np.ndarray:
-    """
-    # dloss/dyhat, g in the xgboost paper
-    """
-    return 2 * y / (1 + np.exp(2 * y * current_estimates))
-
-
-def get_start_estimate_mse(y: np.ndarray) -> float:
-    return float(np.mean(y))
-
-
-def get_start_estimate_log_odds(y: np.ndarray) -> float:
-    """
-    1/2 log(1+ym)/(1-ym) because ym is in [-1, 1]
-    equivalent to log(ym)/(1-ym) if ym were in [0, 1]
-    """
-    ym = np.mean(y)
-    if ym == 1:
-        return math.inf
-    elif ym == -1:
-        return -math.inf
-    start_estimate = 0.5 * math.log((1 + ym) / (1 - ym))
-    return start_estimate
-
-
 def find_step_size(
     y: np.ndarray, current_estimates: np.ndarray, h: np.ndarray
 ) -> float:
@@ -110,12 +82,6 @@ def find_step_size(
     else:
         # Fallback or error handling
         return 1.0
-
-
-def get_probabilities_from_mapped_bools(h: np.ndarray) -> np.ndarray:
-    proba = 1 / (1 + np.exp(-2.0 * h))
-    proba = np.array([1 - proba, proba]).T
-    return proba
 
 
 class GradientBoostedTreesRegressor(
@@ -156,7 +122,7 @@ class GradientBoostedTreesRegressor(
         self.step_sizes_: list[float] = []
 
         for _ in track(range(self.n_trees), total=self.n_trees, description="tree"):
-            r = get_pseudo_residual_mse(y, current_estimates)
+            r, _ = get_pseudo_residual_mse(y, current_estimates, second_order=False)
 
             # train decision tree to predict differences
             new_tree = DecisionTreeRegressor(
@@ -311,7 +277,9 @@ class GradientBoostedTreesClassifier(
         self.step_sizes_: list[float] = []
 
         for _ in track(range(self.n_trees), description="tree", total=self.n_trees):
-            r = get_pseudo_residual_log_odds(y, current_estimates)
+            r, _ = get_pseudo_residual_log_odds(
+                y, current_estimates, second_order=False
+            )
 
             new_tree = DecisionTreeRegressor(
                 measure_name=self.measure_name,
