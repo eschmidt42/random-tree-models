@@ -18,7 +18,7 @@ from random_tree_models.models.decisiontree import (
     DecisionTreeRegressor,
 )
 from random_tree_models.params import MetricNames, is_greater_zero
-from random_tree_models.utils import bool_to_float
+from random_tree_models.utils import vectorize_bool_to_float
 
 
 class GradientBoostedTreesTemplate(base.BaseEstimator):
@@ -63,8 +63,31 @@ def get_pseudo_residual_mse(y: np.ndarray, current_estimates: np.ndarray) -> np.
     return y - current_estimates
 
 
+def get_pseudo_residual_log_odds(
+    y: np.ndarray, current_estimates: np.ndarray
+) -> np.ndarray:
+    """
+    # dloss/dyhat, g in the xgboost paper
+    """
+    return 2 * y / (1 + np.exp(2 * y * current_estimates))
+
+
 def get_start_estimate_mse(y: np.ndarray) -> float:
     return float(np.mean(y))
+
+
+def get_start_estimate_log_odds(y: np.ndarray) -> float:
+    """
+    1/2 log(1+ym)/(1-ym) because ym is in [-1, 1]
+    equivalent to log(ym)/(1-ym) if ym were in [0, 1]
+    """
+    ym = np.mean(y)
+    if ym == 1:
+        return math.inf
+    elif ym == -1:
+        return -math.inf
+    start_estimate = 0.5 * math.log((1 + ym) / (1 - ym))
+    return start_estimate
 
 
 def find_step_size(
@@ -87,6 +110,12 @@ def find_step_size(
     else:
         # Fallback or error handling
         return 1.0
+
+
+def get_probabilities_from_mapped_bools(h: np.ndarray) -> np.ndarray:
+    proba = 1 / (1 + np.exp(-2.0 * h))
+    proba = np.array([1 - proba, proba]).T
+    return proba
 
 
 class GradientBoostedTreesRegressor(
@@ -173,12 +202,6 @@ class GradientBoostedTreesRegressor(
         return y
 
 
-def get_start_estimate(y: np.ndarray) -> float:
-    ym = np.mean(y)
-    start_estimate = 0.5 * math.log((1 + ym) / (1 - ym))
-    return start_estimate
-
-
 class GradientBoostedTreesClassifier(
     base.ClassifierMixin,
     GradientBoostedTreesTemplate,
@@ -251,10 +274,6 @@ class GradientBoostedTreesClassifier(
             ensure_all_finite=ensure_all_finite,
         )
 
-    def _bool_to_float(self, y: np.ndarray) -> np.ndarray:
-        f = np.vectorize(bool_to_float)
-        return f(y)
-
     def _more_tags(self) -> T.Dict[str, bool]:
         """Describes to scikit-learn parametrize_with_checks the scope of this class
 
@@ -286,53 +305,57 @@ class GradientBoostedTreesClassifier(
         self.classes_, y = np.unique(y, return_inverse=True)
         self.trees_: list[DecisionTreeRegressor] = []
 
-        y = self._bool_to_float(y)
-        self.start_estimate_ = get_start_estimate(y)
-
-        yhat = np.ones_like(y) * self.start_estimate_
+        y = vectorize_bool_to_float(y)  # True -> 1, False -> -1
+        self.start_estimate_ = get_start_estimate_log_odds(y)
+        current_estimates = self.start_estimate_ * np.ones_like(y)
+        self.step_sizes_: list[float] = []
 
         for _ in track(range(self.n_trees), description="tree", total=self.n_trees):
-            g = (
-                2 * y / (1 + np.exp(2 * y * yhat))
-            )  # dloss/dyhat, g in the xgboost paper
+            r = get_pseudo_residual_log_odds(y, current_estimates)
 
             new_tree = DecisionTreeRegressor(
                 measure_name=self.measure_name,
                 max_depth=self.max_depth,
                 min_improvement=self.min_improvement,
             )
-            new_tree.fit(X, y, g=g)
+            new_tree.fit(X, y, g=r)
             self.trees_.append(new_tree)
 
-            # update _y
-            g_pred = new_tree.predict(X)
-            yhat += g_pred
+            h = new_tree.predict(X)  # estimate of pseudo residual
+            # find one optimal step size to rule them all
+            gamma = find_step_size(y, current_estimates, h)
+            self.step_sizes_.append(gamma)
+
+            # update differences to predict
+            current_estimates = current_estimates + gamma * h
 
         return self
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(
-            self, ("trees_", "classes_", "n_features_in_", "start_estimate_")
+            self,
+            ("trees_", "classes_", "n_features_in_", "start_estimate_", "step_sizes_"),
         )
         X = validate_data(
             self, X, reset=False, ensure_all_finite=self.ensure_all_finite
         )
 
-        g = np.ones(X.shape[0]) * self.start_estimate_
+        h = np.ones(X.shape[0]) * self.start_estimate_
 
-        for _, tree in track(
-            enumerate(self.trees_), description="tree", total=len(self.trees_)
+        for tree, step_size in track(
+            zip(self.trees_, self.step_sizes_),
+            description="tree",
+            total=len(self.trees_),
         ):  # loop boosts
-            g += tree.predict(X)
+            h += step_size * tree.predict(X)
 
-        proba = 1 / (1 + np.exp(-2.0 * g))
-        proba = np.array([1 - proba, proba]).T
-        return proba
+        p = get_probabilities_from_mapped_bools(h)
+        return p
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        proba = self.predict_proba(X)
+        p = self.predict_proba(X)
 
-        ix = np.argmax(proba, axis=1)
+        ix = np.argmax(p, axis=1)
         y = self.classes_[ix]
 
         return y
