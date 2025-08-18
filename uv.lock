@@ -2737,6 +2737,8 @@ dependencies = [
     { name = "pydantic" },
     { name = "rich" },
     { name = "scikit-learn" },
+    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "scipy", version = "1.16.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "seaborn" },
 ]
 
@@ -2770,6 +2772,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=1.10.8" },
     { name = "rich", specifier = ">=13.3.5" },
     { name = "scikit-learn", specifier = ">=1.2.2" },
+    { name = "scipy", specifier = ">=1.15.3" },
     { name = "seaborn", specifier = ">=0.12.2" },
 ]
 
