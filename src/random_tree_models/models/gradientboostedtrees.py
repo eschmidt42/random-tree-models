@@ -94,7 +94,7 @@ class GradientBoostedTreesRegressor(
         self.factor = factor
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "GradientBoostedTreesRegressor":
-        X, y = validate_data(self, X, y, ensure_all_finite=False)
+        X, y = validate_data(self, X, y, ensure_all_finite=self.ensure_all_finite)
 
         self.trees_: list[DecisionTreeRegressor] = []
 
@@ -122,7 +122,9 @@ class GradientBoostedTreesRegressor(
     def predict(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ("trees_", "n_features_in_", "start_estimate_"))
 
-        X = validate_data(self, X, reset=False, ensure_all_finite=False)
+        X = validate_data(
+            self, X, reset=False, ensure_all_finite=self.ensure_all_finite
+        )
 
         # baseline estimate
         y = np.ones(X.shape[0]) * self.start_estimate_
@@ -135,6 +137,12 @@ class GradientBoostedTreesRegressor(
             y += dy
 
         return y
+
+
+def get_start_estimate(y: np.ndarray) -> float:
+    ym = np.mean(y)
+    start_estimate = 0.5 * math.log((1 + ym) / (1 - ym))
+    return start_estimate
 
 
 class GradientBoostedTreesClassifier(
@@ -227,7 +235,7 @@ class GradientBoostedTreesClassifier(
         return tags
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "GradientBoostedTreesClassifier":
-        X, y = validate_data(self, X, y, ensure_all_finite=False)
+        X, y = validate_data(self, X, y, ensure_all_finite=self.ensure_all_finite)
 
         check_classification_targets(y)
 
@@ -243,11 +251,9 @@ class GradientBoostedTreesClassifier(
 
         self.classes_, y = np.unique(y, return_inverse=True)
         self.trees_: list[DecisionTreeRegressor] = []
-        self.gammas_ = []
 
         y = self._bool_to_float(y)
-        ym = np.mean(y)
-        self.start_estimate_ = 0.5 * math.log((1 + ym) / (1 - ym))
+        self.start_estimate_ = get_start_estimate(y)
 
         yhat = np.ones_like(y) * self.start_estimate_
 
@@ -271,8 +277,12 @@ class GradientBoostedTreesClassifier(
         return self
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        check_is_fitted(self, ("trees_", "classes_", "gammas_", "n_features_in_"))
-        X = validate_data(self, X, reset=False, ensure_all_finite=False)
+        check_is_fitted(
+            self, ("trees_", "classes_", "n_features_in_", "start_estimate_")
+        )
+        X = validate_data(
+            self, X, reset=False, ensure_all_finite=self.ensure_all_finite
+        )
 
         g = np.ones(X.shape[0]) * self.start_estimate_
 
